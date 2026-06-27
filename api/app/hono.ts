@@ -12,14 +12,22 @@ import { createDbConnection } from "../db";
 import { requireAuth } from "../middleware/auth";
 import { AuthService } from "../modules/auth/auth.service";
 import { HttpError } from "../modules/auth/errors";
+import { EvaluationRepository } from "../modules/evaluations/evaluation.repository";
+import { EvaluationService } from "../modules/evaluations/evaluation.service";
+import { ProjectRepository } from "../modules/projects/project.repository";
+import { ProjectService } from "../modules/projects/project.service";
 import { createAuthRoute } from "../routes/auth.route";
+import { createEvaluationsRoute } from "../routes/evaluations.route";
 import { createHealthRoute } from "../routes/health.route";
+import { createProjectsRoute } from "../routes/projects.route";
 import { readAppEnv, type AppEnv } from "./env";
 
 type AppRuntime = {
 	env: AppEnv;
 	dbConnection: DbConnection;
 	authService: AuthService;
+	projectService: ProjectService;
+	evaluationService: EvaluationService;
 };
 
 declare global {
@@ -30,7 +38,14 @@ async function createRuntime(): Promise<AppRuntime> {
 	const env = readAppEnv();
 	const dbConnection = createDbConnection(env.databaseUrl);
 	const authService = new AuthService(dbConnection.db, env);
-	return { env, dbConnection, authService };
+	const projectRepository = new ProjectRepository(dbConnection.db);
+	const projectService = new ProjectService(projectRepository);
+	const evaluationRepository = new EvaluationRepository(dbConnection.db);
+	const evaluationService = new EvaluationService(
+		projectService,
+		evaluationRepository,
+	);
+	return { env, dbConnection, authService, projectService, evaluationService };
 }
 
 export async function getAppRuntime(): Promise<AppRuntime> {
@@ -110,6 +125,19 @@ app.onError(async (error, c) => {
 
 const apiRoutes = new Hono()
 	.route("/health", createHealthRoute())
+	.route(
+		"/projects",
+		createProjectsRoute({
+			projectService: runtime.projectService,
+			evaluationService: runtime.evaluationService,
+		}),
+	)
+	.route(
+		"/evaluations",
+		createEvaluationsRoute({
+			evaluationService: runtime.evaluationService,
+		}),
+	)
 	.use(
 		"/auth/me",
 		requireAuth({

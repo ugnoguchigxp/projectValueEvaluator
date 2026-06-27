@@ -1,14 +1,14 @@
 {
-	"name": "hono-standard",
+	"name": "project-value-evaluator",
 	"version": "1.0.0",
-	"description": "Minimal Hono + React template with optional login and showcase screens.",
+	"description": "Project value evaluator that turns score gaps into improvement requests.",
 	"type": "module",
 	"author": "",
 	"license": "MIT",
 	"keywords": [
 		"hono",
-		"react",
-		"vite",
+		"project-evaluation",
+		"coding-agents",
 		"typescript"
 	],
 	"scripts": {
@@ -16,6 +16,9 @@
 		"dev:vite": "vite",
 		"start": "bun run api/app/server.ts",
 		"auth:create-admin": "bun run api/cli/auth-create-admin.ts",
+		"evaluator:bundle": "bun run api/cli/bundle.ts",
+		"evaluator:evaluate": "bun run api/cli/evaluate.ts",
+		"evaluator:reevaluate": "bun run api/cli/reevaluate.ts",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "bun run api/cli/migrate.ts",
 		"db:migrate:drizzle": "drizzle-kit migrate",

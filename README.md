@@ -1,38 +1,60 @@
-# Hono Standard
+# ProjectValueEvaluator
 
-[![Bun](https://img.shields.io/badge/Bun-%23000000.svg?style=for-the-badge&logo=bun&logoColor=white)](https://bun.sh/)
-[![Hono](https://img.shields.io/badge/Hono-%23E36022.svg?style=for-the-badge&logo=hono&logoColor=white)](https://hono.dev/)
-[![React](https://img.shields.io/badge/React-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)](https://react.dev/)
-[![SQLite](https://img.shields.io/badge/SQLite-003B57.svg?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE.md)
+ProjectValueEvaluator は、ソフトウェアプロジェクトの現在価値を評価し、100 点の理想状態との差分を次の改善タスクへ変換するための Hono + TypeScript ベースの評価サービスです。
 
-Hono backend と React + Vite frontend を同一 origin で動かす、local SQLite 対応の Web app template です。Drizzle のユーザー認証、httpOnly Cookie による access / refresh token、React Router ベースの画面、コンポーネント showcase を含みます。
+評価結果は単なるスコアではなく、`evidenceLevel`、`confidence`、`notVerified`、`nextEvidenceToCollect` を含みます。これにより、README や repo tree からの表層評価と、runtime verified / audit grade の評価を混同せず、コーディングエージェントに渡せる改善依頼へ変換できます。
+
+## MVP
+
+現在の MVP は次の流れを実行できます。
+
+```text
+ProjectProfile
+  -> EvaluationBundle
+  -> deterministic fallback judge
+  -> ProjectValueEvaluation
+  -> Gap classification
+  -> ImprovementRequest
+  -> Re-evaluation delta
+```
+
+MVP では外部 LLM 接続は必須ではありません。`api/modules/llm/judge-client.ts` の deterministic fallback judge により、ローカル検証だけで評価フローを通せます。
+
+## 評価で扱うもの
+
+| Item | Purpose |
+| --- | --- |
+| `ProjectProfile` | Project Ideal、対象 workflow、non-goals、評価軸 |
+| `EvaluationBundle` | README、LLM_CONTEXT、AGENTS、package.json、repo tree、previous evaluation |
+| `ProjectValueEvaluation` | score、dimension score、confidence、gap、未確認事項 |
+| `ImprovementRequest` | gap を coding agent が実行できる改善依頼へ変換したもの |
+
+## Evidence Level
+
+| Level | Meaning |
+| --- | --- |
+| `surface` | README、LLM_CONTEXT、package metadata などから評価 |
+| `repo-structure` | directory tree、scripts、主要配置から評価 |
+| `code-sampled` | 主要実装ファイルの一部を読んで評価 |
+| `runtime-verified` | test、typecheck、build、起動、sample output を確認して評価 |
+| `audit-grade` | security boundary、sandbox、実行経路まで監査して評価 |
+
+現在の MVP は `repo-structure` 評価を生成し、未確認の runtime / audit 項目は `notVerified` と `nextEvidenceToCollect` に明示します。
 
 ## 構成
 
 | Path | Role |
 | --- | --- |
-| `api/app/hono.ts` | Hono app composition。middleware、API route、静的配信、`AppType` を登録 |
-| `api/app/server.ts` | Bun server bootstrap |
-| `api/app/env.ts` | runtime env parser |
-| `api/config/appDefaults.ts` | 非シークレットの既定値 |
-| `api/db/schema.ts` | Drizzle SQLite schema |
-| `api/routes/auth.route.ts` | `/api/auth/*` route |
-| `api/routes/health.route.ts` | `/api/health` route |
-| `api/modules/auth/` | password hash、JWT、cookie、auth service |
-| `api/middleware/auth.ts` | protected API middleware |
-| `web/src/` | React frontend |
-| `shared/schemas/` | frontend/backend で共有する Zod schema と API object type |
-| `drizzle/` | SQL migrations |
-| `scripts/verify.ts` | typecheck / lint / format / test / build の検証 pipeline |
-
-## 前提
-
-| Tool | 用途 |
-| --- | --- |
-| Bun | package manager、runtime、scripts |
-| SQLite | auth user / refresh token storage |
+| `api/app/hono.ts` | Hono app composition、API route 登録、`AppType` export |
+| `api/routes/projects.route.ts` | ProjectProfile と project-scoped evaluation API |
+| `api/routes/evaluations.route.ts` | Evaluation / Improvement lookup API |
+| `api/modules/projects/` | ProjectProfile repository / service |
+| `api/modules/evaluations/` | bundle builder、repository、service、improvement generator |
+| `api/modules/llm/judge-client.ts` | deterministic fallback judge。将来の LLM judge 差し替え点 |
+| `api/cli/` | bundle / evaluate / reevaluate CLI |
+| `shared/schemas/` | API / CLI / judge output 共有 Zod schema |
+| `drizzle/` | SQLite migrations |
+| `spec/` | コンセプトと MVP 実装計画 |
 
 ## セットアップ
 
@@ -40,79 +62,66 @@ Hono backend と React + Vite frontend を同一 origin で動かす、local SQL
 bun install
 cp .env.example .env
 bun run db:migrate
-bun run auth:create-admin -- --email admin@example.com --name "Admin User"
-bun run dev
 ```
 
-`auth:create-admin` は対話で password を読みます。自動化する場合は次のように標準入力から渡せます。
+## CLI
 
 ```bash
-printf '%s\n' '<password>' | bun run auth:create-admin -- --email admin@example.com --name "Admin User" --password-stdin
+bun run evaluator:bundle -- --project /path/to/repo
+bun run evaluator:evaluate -- --project /path/to/repo
+bun run evaluator:reevaluate -- --project /path/to/repo
 ```
 
-開発サーバーは `http://localhost:5173` で起動します。Vite dev server が frontend を配信し、`/api/*` は Hono に渡されます。
+JSON 出力:
 
-## 環境変数
+```bash
+bun run evaluator:evaluate -- --project /path/to/repo --json
+```
 
-非シークレットの既定値は `api/config/appDefaults.ts` にあります。`.env.example` は local development 向けの値です。
+profile JSON を指定する場合:
 
-| Variable | Required | Description | Default |
-| --- | --- | --- | --- |
-| `NODE_ENV` | no | `development` / `test` / `production` | `development` |
-| `DATABASE_URL` | no | SQLite database file path | `sqlite.db` |
-| `JWT_SECRET` | production yes | JWT signing secret。32 文字以上。production では未設定または dev default のままだと起動しません | dev default |
-| `APP_URL` | no | public origin。cookie secure 既定値と CORS に使う | `http://localhost:5173` |
-| `CORS_ORIGINS` | no | 追加許可 origin。カンマ区切り | `http://localhost:5173` |
-| `AUTH_COOKIE_SECURE` | no | auth cookie に `Secure` を付けるか | production/HTTPS では `true` |
-| `AUTH_COOKIE_SAME_SITE` | no | auth cookie SameSite | `lax` |
-| `SECURITY_HEADERS_MODE` | no | HTTPS 前提 header の有効化方針。`auto` / `http` / `https` | `auto` |
+```bash
+bun run evaluator:evaluate -- --project /path/to/repo --profile project-profile.json
+```
 
-`AUTH_COOKIE_SAME_SITE=none` を使う場合は、HTTPS の `APP_URL` または `AUTH_COOKIE_SECURE=true` が必要です。
-
-## Scripts
-
-| Command | Purpose |
-| --- | --- |
-| `bun run dev` | Vite + Hono dev server |
-| `bun run start` | Bun server を直接起動 |
-| `bun run auth:create-admin -- --email <email> --name "<name>"` | admin user 作成 |
-| `bun run db:migrate` | `drizzle/*.sql` を順番に適用 |
-| `bun run db:generate` | Drizzle migration 生成 |
-| `bun run db:migrate:drizzle` | drizzle-kit migration。`DATABASE_URL` は process env または `.env` から読む |
-| `bun run typecheck` | TypeScript check |
-| `bun run lint` | Biome lint |
-| `bun run format` | Biome format write |
-| `bun run format:check` | Biome format check |
-| `bun run test` | Vitest |
-| `bun run build` | Vite production build |
-| `bun run verify` | typecheck、lint、format:check、test、build |
+`project-profile.json` は `name`、`ideal`、`primaryAudience`、`targetWorkflow`、`nonGoals`、`dimensions` を上書きできます。`rootPath` は `--project` が優先されます。
 
 ## API
 
 | Method | Path | Description |
 | --- | --- | --- |
 | `GET` | `/api/health` | health check |
-| `POST` | `/api/auth/login` | email/password login。httpOnly cookie を設定 |
-| `POST` | `/api/auth/refresh` | refresh token rotation |
-| `POST` | `/api/auth/logout` | refresh token revoke と cookie clear |
-| `GET` | `/api/auth/me` | 現在の login user |
+| `POST` | `/api/projects` | ProjectProfile 作成 |
+| `GET` | `/api/projects/:id` | ProjectProfile 取得 |
+| `POST` | `/api/projects/:id/evaluations` | 評価実行 |
+| `GET` | `/api/projects/:id/evaluations/latest` | 最新評価取得 |
+| `POST` | `/api/projects/:id/reevaluate` | 再評価実行 |
+| `GET` | `/api/evaluations/:id` | 評価取得 |
+| `GET` | `/api/evaluations/:id/improvements` | 改善依頼取得 |
 
-`/api/auth/me` は access token が必要です。frontend client は 401 を受けると `/api/auth/refresh` を一度試し、成功した場合だけ元の request を再実行します。
-
-API request / response の共有 schema は `shared/schemas/` に置きます。Backend route はその schema を `zValidator` で使い、frontend は `api/app/hono.ts` から export される `AppType` を `hono/client` に渡して API 型を共有します。
-
-## Build / Runtime
+## 検証
 
 ```bash
+bun run typecheck
+bun run lint
+bun run format:check
+bun run test
 bun run build
-NODE_ENV=production bun run start
+bun run verify
 ```
 
-production では `JWT_SECRET` を必ず強いランダム値に変更してください。未設定または dev default のままの場合、アプリは起動時に失敗します。HTTPS で公開する場合は `APP_URL=https://...` とし、必要に応じて `AUTH_COOKIE_SECURE=true`、`SECURITY_HEADERS_MODE=https` を明示します。
+## MVP Non-goals
 
-## Template Notes
+```text
+- 自動で改善実装を実行する agent orchestration
+- audit-grade のコード監査
+- runtime sandbox 実行
+- 複数 LLM による voting
+- 大きな dashboard
+- SaaS 的な multi-tenant user management
+```
 
-- この branch は RAG / pgvector / agentic search template ではありません。
-- 認証は optional UI として残しています。Home と Showcase は未ログインでも表示されます。
-- SQLite は auth user と refresh token 保存に使います。
-- clone 後は `package.json` の name / description、README、`.env.example`、DB 名、cookie/CORS/security 設定を利用先に合わせて見直してください。
+## 詳細仕様
+
+- [ProjectValueEvaluator Concept](spec/project-value-evaluator-concept.md)
+- [MVP Implementation Plan](spec/mvp-implementation-plan.md)
