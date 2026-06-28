@@ -7,6 +7,11 @@ const optionalTrimmedString = z.preprocess((value) => {
 	return trimmed.length > 0 ? trimmed : undefined;
 }, z.string().trim().optional());
 
+const optionalSqliteDatabasePath = optionalTrimmedString.refine(
+	(value) => !value || !/^[a-z][a-z0-9+.-]*:\/\//i.test(value),
+	"DATABASE_URL must be a SQLite file path, not a network database URL.",
+);
+
 const optionalUrl = z.preprocess((value) => {
 	if (typeof value !== "string") return value;
 	const trimmed = value.trim();
@@ -42,7 +47,7 @@ const EnvSchema = z.object({
 	NODE_ENV: z
 		.enum(["development", "test", "production"])
 		.default(APP_CONFIG_DEFAULTS.nodeEnv),
-	DATABASE_URL: optionalTrimmedString,
+	DATABASE_URL: optionalSqliteDatabasePath,
 	APP_URL: optionalUrl,
 	CORS_ORIGINS: optionalTrimmedString,
 	AUTH_COOKIE_SECURE: optionalBoolean,

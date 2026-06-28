@@ -17,9 +17,11 @@ import { EvaluationService } from "../modules/evaluations/evaluation.service";
 import { ProjectRepository } from "../modules/projects/project.repository";
 import { ProjectService } from "../modules/projects/project.service";
 import { createAuthRoute } from "../routes/auth.route";
+import { createCodexRoute } from "../routes/codex.route";
 import { createEvaluationsRoute } from "../routes/evaluations.route";
 import { createHealthRoute } from "../routes/health.route";
 import { createProjectsRoute } from "../routes/projects.route";
+import { createSystemRoute } from "../routes/system.route";
 import { readAppEnv, type AppEnv } from "./env";
 
 type AppRuntime = {
@@ -30,8 +32,18 @@ type AppRuntime = {
 	evaluationService: EvaluationService;
 };
 
+type CachedAppRuntime = {
+	version: string;
+	runtime: Promise<AppRuntime>;
+};
+
+const APP_RUNTIME_VERSION = "evaluation-activity-events-v1";
+
 declare global {
-	var __honoStandardRuntime__: Promise<AppRuntime> | undefined;
+	var __honoStandardRuntime__:
+		| CachedAppRuntime
+		| Promise<AppRuntime>
+		| undefined;
 }
 
 async function createRuntime(): Promise<AppRuntime> {
@@ -49,13 +61,23 @@ async function createRuntime(): Promise<AppRuntime> {
 }
 
 export async function getAppRuntime(): Promise<AppRuntime> {
-	if (!globalThis.__honoStandardRuntime__) {
-		globalThis.__honoStandardRuntime__ = createRuntime().catch((error) => {
+	let cached = globalThis.__honoStandardRuntime__;
+	if (
+		!cached ||
+		cached instanceof Promise ||
+		cached.version !== APP_RUNTIME_VERSION
+	) {
+		const runtime = createRuntime().catch((error) => {
 			globalThis.__honoStandardRuntime__ = undefined;
 			throw error;
 		});
+		globalThis.__honoStandardRuntime__ = {
+			version: APP_RUNTIME_VERSION,
+			runtime,
+		};
+		cached = globalThis.__honoStandardRuntime__;
 	}
-	return globalThis.__honoStandardRuntime__;
+	return cached.runtime;
 }
 
 const runtime = await getAppRuntime();
@@ -85,22 +107,27 @@ app.use(
 			return null;
 		},
 		credentials: true,
-		allowMethods: ["GET", "POST", "OPTIONS"],
+		allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
 		allowHeaders: ["Content-Type", "Authorization"],
 	}),
 );
 app.use("/api/*", csrf());
 
 app.onError(async (error, c) => {
-	console.error(error);
 	if (error instanceof HttpError) {
+		if (error.status >= 500) {
+			console.error(error);
+		}
 		return c.json(
 			{ message: error.message },
-			error.status as 400 | 401 | 403 | 404 | 409 | 500,
+			error.status as 400 | 401 | 403 | 404 | 409 | 500 | 501 | 502,
 		);
 	}
 	if (error instanceof HTTPException) {
 		const response = error.getResponse();
+		if (response.status >= 500) {
+			console.error(error);
+		}
 		const message =
 			(await response
 				.clone()
@@ -111,9 +138,10 @@ app.onError(async (error, c) => {
 			"Request failed";
 		return c.json(
 			{ message },
-			error.status as 400 | 401 | 403 | 404 | 409 | 500,
+			error.status as 400 | 401 | 403 | 404 | 409 | 500 | 501 | 502,
 		);
 	}
+	console.error(error);
 	const message =
 		runtime.env.nodeEnv === "production"
 			? "Internal server error"
@@ -125,6 +153,8 @@ app.onError(async (error, c) => {
 
 const apiRoutes = new Hono()
 	.route("/health", createHealthRoute())
+	.route("/codex", createCodexRoute())
+	.route("/system", createSystemRoute())
 	.route(
 		"/projects",
 		createProjectsRoute({

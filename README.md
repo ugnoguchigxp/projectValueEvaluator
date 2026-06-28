@@ -1,45 +1,62 @@
 # ProjectValueEvaluator
 
-ProjectValueEvaluator は、ソフトウェアプロジェクトの現在価値を評価し、100 点の理想状態との差分を次の改善タスクへ変換するための Hono + TypeScript ベースの評価サービスです。
+ProjectValueEvaluator は、ソフトウェアプロジェクトの現在価値を多角的に評点し、前回評価との差分と次の改善案を比較可能な形で残すための Hono + TypeScript ベースの評価サービスです。
 
-評価結果は単なるスコアではなく、`evidenceLevel`、`confidence`、`notVerified`、`nextEvidenceToCollect` を含みます。これにより、README や repo tree からの表層評価と、runtime verified / audit grade の評価を混同せず、コーディングエージェントに渡せる改善依頼へ変換できます。
+中心にある baseline prompt は次です。
+
+```text
+このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください
+```
+
+このプロジェクトの役割は、上記の評価依頼を Codex-first で実行し、prompt、rubric、schema、provider 設定、保存履歴、前回比較を固定化することです。Codex を現在の主 judge としつつ、OpenAI / Azure OpenAI / Local LLM などの provider 拡張点は残します。
 
 ## MVP
 
-現在の MVP は次の流れを実行できます。
+再設計後の MVP は次の流れを目標にします。
 
 ```text
 ProjectProfile
-  -> EvaluationBundle
-  -> deterministic fallback judge
-  -> ProjectValueEvaluation
-  -> Gap classification
-  -> ImprovementRequest
-  -> Re-evaluation delta
+  -> EvaluationPromptContext
+  -> JudgeProviderAdapter
+  -> ProjectEvaluationReport v1
+  -> EvaluationDelta
+  -> ImprovementIdeas
+  -> Saved history
 ```
 
-MVP では外部 LLM 接続は必須ではありません。`api/modules/llm/judge-client.ts` の deterministic fallback judge により、ローカル検証だけで評価フローを通せます。
+現在の実装は移行途中です。source truth は [Codex-First Multi-Agent Evaluation Implementation Plan](spec/codex-first-multi-agent-evaluation-implementation-plan.md) です。
 
 ## 評価で扱うもの
 
 | Item | Purpose |
 | --- | --- |
 | `ProjectProfile` | Project Ideal、対象 workflow、non-goals、評価軸 |
-| `EvaluationBundle` | README、LLM_CONTEXT、AGENTS、package.json、repo tree、previous evaluation |
-| `ProjectValueEvaluation` | score、dimension score、confidence、gap、未確認事項 |
-| `ImprovementRequest` | gap を coding agent が実行できる改善依頼へ変換したもの |
+| `EvaluationPromptContext` | baseline prompt、対象 repo 情報、前回評価 summary、judge 設定 |
+| `ProjectEvaluationReport` | overall score、dimension score、confidence、根拠、弱点、改善案 |
+| `EvaluationDelta` | 前回評価との差分、dimension delta、新規/解消された弱点 |
+| `ImprovementIdea` | 評価結果から導かれた次の改善候補 |
 
-## Evidence Level
+## デフォルト評価軸
 
-| Level | Meaning |
+| Key | Label |
 | --- | --- |
-| `surface` | README、LLM_CONTEXT、package metadata などから評価 |
-| `repo-structure` | directory tree、scripts、主要配置から評価 |
-| `code-sampled` | 主要実装ファイルの一部を読んで評価 |
-| `runtime-verified` | test、typecheck、build、起動、sample output を確認して評価 |
-| `audit-grade` | security boundary、sandbox、実行経路まで監査して評価 |
+| `conceptValue` | コンセプト価値 |
+| `implementationCompleteness` | 実装完成度 |
+| `architectureQuality` | アーキテクチャ |
+| `uiUx` | UI/UX |
+| `testability` | テスト容易性 |
+| `operability` | 運用性 |
+| `security` | セキュリティ |
+| `maintainability` | 保守性 |
+| `extensibility` | 拡張性 |
+| `ossProductValue` | OSS/外部提供価値 |
+| `strategicFit` | 戦略適合 |
 
-現在の MVP は `repo-structure` 評価を生成し、未確認の runtime / audit 項目は `notVerified` と `nextEvidenceToCollect` に明示します。
+## Evidence Policy
+
+baseline 評価は、Codex / LLMProvider に多角的な評点を依頼する経路です。アプリ側は、この経路で build、test、verify、source inspection を自動実行しません。
+
+評価結果には、judge が確認できなかった事項を `notVerified` として残します。runtime verification や audit-grade evidence は、後続の明示的な evidence collector として追加します。
 
 ## 構成
 
@@ -49,12 +66,12 @@ MVP では外部 LLM 接続は必須ではありません。`api/modules/llm/jud
 | `api/routes/projects.route.ts` | ProjectProfile と project-scoped evaluation API |
 | `api/routes/evaluations.route.ts` | Evaluation / Improvement lookup API |
 | `api/modules/projects/` | ProjectProfile repository / service |
-| `api/modules/evaluations/` | bundle builder、repository、service、improvement generator |
-| `api/modules/llm/judge-client.ts` | deterministic fallback judge。将来の LLM judge 差し替え点 |
-| `api/cli/` | bundle / evaluate / reevaluate CLI |
+| `api/modules/evaluations/` | prompt context、repository、service、delta、improvement generator |
+| `api/modules/llm/judge-client.ts` | Codex-first judge client。provider adapter 境界 |
+| `api/cli/` | evaluate / reevaluate CLI |
 | `shared/schemas/` | API / CLI / judge output 共有 Zod schema |
 | `drizzle/` | SQLite migrations |
-| `spec/` | コンセプトと MVP 実装計画 |
+| `spec/` | 現行の実装計画 |
 
 ## セットアップ
 
@@ -67,7 +84,6 @@ bun run db:migrate
 ## CLI
 
 ```bash
-bun run evaluator:bundle -- --project /path/to/repo
 bun run evaluator:evaluate -- --project /path/to/repo
 bun run evaluator:reevaluate -- --project /path/to/repo
 ```
@@ -123,5 +139,4 @@ bun run verify
 
 ## 詳細仕様
 
-- [ProjectValueEvaluator Concept](spec/project-value-evaluator-concept.md)
-- [MVP Implementation Plan](spec/mvp-implementation-plan.md)
+- [Codex-First Multi-Agent Evaluation Implementation Plan](spec/codex-first-multi-agent-evaluation-implementation-plan.md)

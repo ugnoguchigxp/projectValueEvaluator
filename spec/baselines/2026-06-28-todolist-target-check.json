@@ -1,0 +1,2694 @@
+{
+  "bundle": {
+    "id": "0250ec32-9fcc-46c6-8f96-e77b58a256be",
+    "projectId": "ecebbb45-67a4-48a1-a198-f98229ce79b3",
+    "evidenceLevel": "repo-structure",
+    "projectRoot": "/Users/y.noguchi/Code/todolist",
+    "inputs": {
+      "promptContext": {
+        "schemaVersion": "evaluation-prompt-context/v1",
+        "baselinePrompt": "このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください",
+        "projectName": "todolist",
+        "projectRoot": "/Users/y.noguchi/Code/todolist",
+        "projectIdeal": "このプロジェクトが、対象ユーザーに明確な価値を提供し、実装・検証・文書・agent usability が揃った状態。",
+        "primaryAudience": "coding agents",
+        "targetWorkflow": "evaluate project value and generate next improvements",
+        "nonGoals": [],
+        "dimensions": [
+          {
+            "key": "conceptValue",
+            "label": "conceptValue"
+          },
+          {
+            "key": "implementationCompleteness",
+            "label": "implementationCompleteness"
+          },
+          {
+            "key": "architectureQuality",
+            "label": "architectureQuality"
+          },
+          {
+            "key": "maintainability",
+            "label": "maintainability"
+          },
+          {
+            "key": "security",
+            "label": "security"
+          },
+          {
+            "key": "testability",
+            "label": "testability"
+          },
+          {
+            "key": "documentation",
+            "label": "documentation"
+          },
+          {
+            "key": "agentUsability",
+            "label": "agentUsability"
+          },
+          {
+            "key": "extensibility",
+            "label": "extensibility"
+          },
+          {
+            "key": "reliability",
+            "label": "reliability"
+          },
+          {
+            "key": "strategicFit",
+            "label": "strategicFit"
+          },
+          {
+            "key": "ossProductValue",
+            "label": "ossProductValue"
+          }
+        ],
+        "judgeSettings": {
+          "provider": "codex",
+          "model": "gpt-5.5",
+          "codexMode": "review-only",
+          "status": "ready"
+        },
+        "previousEvaluation": {
+          "evaluationId": "de09bc07-5d20-4bc1-ac56-dae0f7e27ecc",
+          "overallScore": 72,
+          "confidence": 0.64,
+          "dimensions": [
+            {
+              "key": "conceptValue",
+              "score": 88
+            },
+            {
+              "key": "implementationCompleteness",
+              "score": 81
+            },
+            {
+              "key": "architectureQuality",
+              "score": 76
+            },
+            {
+              "key": "maintainability",
+              "score": 64
+            },
+            {
+              "key": "security",
+              "score": 68
+            },
+            {
+              "key": "testability",
+              "score": 73
+            },
+            {
+              "key": "documentation",
+              "score": 66
+            },
+            {
+              "key": "agentUsability",
+              "score": 69
+            },
+            {
+              "key": "extensibility",
+              "score": 66
+            },
+            {
+              "key": "reliability",
+              "score": 75
+            },
+            {
+              "key": "strategicFit",
+              "score": 63
+            },
+            {
+              "key": "ossProductValue",
+              "score": 71
+            }
+          ],
+          "weaknesses": [
+            "テスト実行結果が未確認",
+            "sample evaluation output が未確認"
+          ],
+          "createdAt": "2026-06-28T01:52:42.000Z"
+        },
+        "inputs": {
+          "readme": "# Hono Standard\n\n[![Bun](https://img.shields.io/badge/Bun-%23000000.svg?style=for-the-badge&logo=bun&logoColor=white)](https://bun.sh/)\n[![Hono](https://img.shields.io/badge/Hono-%23E36022.svg?style=for-the-badge&logo=hono&logoColor=white)](https://hono.dev/)\n[![React](https://img.shields.io/badge/React-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)](https://react.dev/)\n[![SQLite](https://img.shields.io/badge/SQLite-003B57.svg?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)\n[![TypeScript](https://img.shields.io/badge/TypeScript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)\n[![MIT License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE.md)\n\nHono backend と React + Vite frontend を同一 origin で動かす、local SQLite 対応の Web app template です。Drizzle のユーザー認証、httpOnly Cookie による access / refresh token、React Router ベースの画面、コンポーネント showcase を含みます。\n\n## 構成\n\n| Path | Role |\n| --- | --- |\n| `api/app/hono.ts` | Hono app composition。middleware、API route、静的配信、`AppType` を登録 |\n| `api/app/server.ts` | Bun server bootstrap |\n| `api/app/env.ts` | runtime env parser |\n| `api/config/appDefaults.ts` | 非シークレットの既定値 |\n| `api/db/schema.ts` | Drizzle SQLite schema |\n| `api/routes/auth.route.ts` | `/api/auth/*` route |\n| `api/routes/health.route.ts` | `/api/health` route |\n| `api/modules/auth/` | password hash、JWT、cookie、auth service |\n| `api/middleware/auth.ts` | protected API middleware |\n| `web/src/` | React frontend |\n| `shared/schemas/` | frontend/backend で共有する Zod schema と API object type |\n| `drizzle/` | SQL migrations |\n| `scripts/verify.ts` | typecheck / lint / format / test / build の検証 pipeline |\n\n## 前提\n\n| Tool | 用途 |\n| --- | --- |\n| Bun | package manager、runtime、scripts |\n| SQLite | auth user / refresh token storage |\n\n## セットアップ\n\n```bash\nbun install\ncp .env.example .env\nbun run db:migrate\nbun run auth:create-admin -- --email admin@example.com --name \"Admin User\"\nbun run dev\n```\n\n`auth:create-admin` は対話で password を読みます。自動化する場合は次のように標準入力から渡せます。\n\n```bash\nprintf '%s\\n' '<password>' | bun run auth:create-admin -- --email admin@example.com --name \"Admin User\" --password-stdin\n```\n\n開発サーバーは `http://localhost:5173` で起動します。Vite dev server が frontend を配信し、`/api/*` は Hono に渡されます。\n\n## 環境変数\n\n非シークレットの既定値は `api/config/appDefaults.ts` にあります。`.env.example` は local development 向けの値です。\n\n| Variable | Required | Description | Default |\n| --- | --- | --- | --- |\n| `NODE_ENV` | no | `development` / `test` / `production` | `development` |\n| `DATABASE_URL` | no | SQLite database file path | `sqlite.db` |\n| `JWT_SECRET` | production yes | JWT signing secret。32 文字以上。production では未設定または dev default のままだと起動しません | dev default |\n| `APP_URL` | no | public origin。cookie secure 既定値と CORS に使う | `http://localhost:5173` |\n| `CORS_ORIGINS` | no | 追加許可 origin。カンマ区切り | `http://localhost:5173` |\n| `AUTH_COOKIE_SECURE` | no | auth cookie に `Secure` を付けるか | production/HTTPS では `true` |\n| `AUTH_COOKIE_SAME_SITE` | no | auth cookie SameSite | `lax` |\n| `SECURITY_HEADERS_MODE` | no | HTTPS 前提 header の有効化方針。`auto` / `http` / `https` | `auto` |\n\n`AUTH_COOKIE_SAME_SITE=none` を使う場合は、HTTPS の `APP_URL` または `AUTH_COOKIE_SECURE=true` が必要です。\n\n## Scripts\n\n| Command | Purpose |\n| --- | --- |\n| `bun run dev` | Vite + Hono dev server |\n| `bun run start` | Bun server を直接起動 |\n| `bun run auth:create-admin -- --email <email> --name \"<name>\"` | admin user 作成 |\n| `bun run db:migrate` | `drizzle/*.sql` を順番に適用 |\n| `bun run db:generate` | Drizzle migration 生成 |\n| `bun run db:migrate:drizzle` | drizzle-kit migration。`DATABASE_URL` は process env または `.env` から読む |\n| `bun run typecheck` | TypeScript check |\n| `bun run lint` | Biome lint |\n| `bun run format` | Biome format write |\n| `bun run format:check` | Biome format check |\n| `bun run test` | Vitest |\n| `bun run build` | Vite production build |\n| `bun run verify` | typecheck、lint、format:check、test、build |\n\n## API\n\n| Method | Path | Description |\n| --- | --- | --- |\n| `GET` | `/api/health` | health check |\n| `POST` | `/api/auth/login` | email/password login。httpOnly cookie を設定 |\n| `POST` | `/api/auth/refresh` | refresh token rotation |\n| `POST` | `/api/auth/logout` | refresh token revoke と cookie clear |\n| `GET` | `/api/auth/me` | 現在の login user |\n\n`/api/auth/me` は access token が必要です。frontend client は 401 を受けると `/api/auth/refresh` を一度試し、成功した場合だけ元の request を再実行します。\n\nAPI request / response の共有 schema は `shared/schemas/` に置きます。Backend route はその schema を `zValidator` で使い、frontend は `api/app/hono.ts` から export される `AppType` を `hono/client` に渡して API 型を共有します。\n\n## Build / Runtime\n\n```bash\nbun run build\nNODE_ENV=production bun run start\n```\n\nproduction では `JWT_SECRET` を必ず強いランダム値に変更してください。未設定または dev default のままの場合、アプリは起動時に失敗します。HTTPS で公開する場合は `APP_URL=https://...` とし、必要に応じて `AUTH_COOKIE_SECURE=true`、`SECURITY_HEADERS_MODE=https` を明示します。\n\n## Template Notes\n\n- この branch は RAG / pgvector / agentic search template ではありません。\n- 認証は optional UI として残しています。Home と Showcase は未ログインでも表示されます。\n- SQLite は auth user と refresh token 保存に使います。\n- clone 後は `package.json` の name / description、README、`.env.example`、DB 名、cookie/CORS/security 設定を利用先に合わせて見直してください。\n",
+          "llmContext": "# LLM Context: Hono Standard\n\nこの文書は、`hono-standard` を clone した直後に作業入口を決めるための圧縮コンテキストです。現行 branch は local SQLite auth/showcase template です。RAG、pgvector、agentic search、wiki ingestion は含みません。\n\n## Repository Snapshot\n\n- Bun + Hono backend と React + Vite frontend を同一 origin で動かす template。\n- DB は local SQLite。Drizzle schema は `api/db/schema.ts`、migration は `drizzle/`。\n- Backend app composition は `api/app/hono.ts`、server bootstrap は `api/app/server.ts`。\n- Frontend entry は `web/src/App.tsx`、router は `web/src/router.tsx`、API client は `web/src/api.ts`。\n- Auth 実装は `api/modules/auth/`、route は `api/routes/auth.route.ts`、login UI は `web/src/domains/auth/login-domain.tsx`。\n- Shared API schema/object は `shared/schemas/`。Backend は `zValidator`、frontend は `hono/client` + `AppType` で同じ契約を参照する。\n- Home と Showcase は未ログインでも表示する。ログイン状態がある場合だけ header に user chip と logout button を表示する。\n- Package manager / runtime は Bun。dev server は `bunx --bun vite` で起動する。\n\n## Top-Level Map\n\n| Path | Role |\n| --- | --- |\n| `api/app/hono.ts` | Hono middleware、API route、static fallback、`AppType` export |\n| `api/app/server.ts` | Bun server bootstrap |\n| `api/app/env.ts` | environment parsing and defaults |\n| `api/config/appDefaults.ts` | non-secret app defaults |\n| `api/db/` | SQLite connection and Drizzle schema |\n| `api/routes/auth.route.ts` | `/api/auth/*` route module |\n| `api/routes/health.route.ts` | health route |\n| `api/modules/auth/` | Auth service、JWT、cookies、password hashing |\n| `api/middleware/auth.ts` | access-token auth middleware |\n| `shared/schemas/` | Zod schema and public API object types shared by api and web |\n| `web/src/App.tsx` | React Query and Router providers |\n| `web/src/router.tsx` | TanStack Router tree |\n| `web/src/api.ts` | browser API client and auth refresh handling |\n| `web/src/auth-context.tsx` | frontend auth state |\n| `web/src/routes/` | route definitions |\n| `web/src/views/` | Home/Login/Showcase views |\n| `web/src/showcase-*` | showcase state and URL search helpers |\n| `drizzle/` | SQL migrations |\n| `scripts/verify.ts` | verification pipeline |\n\n## Task Routing\n\n| Task | Start here | Usually also read | Defer unless touched |\n| --- | --- | --- | --- |\n| Change auth API | `api/routes/auth.route.ts`, `api/modules/auth/`, `api/middleware/auth.ts`, `shared/schemas/auth.schema.ts` | `web/src/api.ts`, `web/src/auth-context.tsx` | showcase UI |\n| Change login UI | `web/src/views/login-view.tsx`, `web/src/domains/auth/login-domain.tsx` | `web/src/auth-context.tsx`, `web/src/api.ts` | DB schema |\n| Change app shell/routing | `web/src/routes/root-route.tsx`, `web/src/router.tsx` | `web/src/App.tsx`, affected view | auth service internals |\n| Change showcase UI | `web/src/views/showcase-view.tsx`, `web/src/showcase-settings-context.tsx`, `web/src/showcase-table-search.ts` | `web/src/styles.css` | backend auth |\n| Change env/config | `api/app/env.ts`, `api/config/appDefaults.ts`, `.env.example` | `drizzle.config.ts` | frontend views |\n| Change DB schema/migration | `api/db/schema.ts`, `drizzle/`, `api/cli/migrate.ts` | `api/modules/auth/auth.service.ts`, `api/modules/auth/token.service.ts` | showcase UI |\n| Change build/dev tooling | `package.json`, `vite.config.ts`, `vitest.config.ts`, `scripts/verify.ts` | failing config-specific output | feature code |\n\n## Implementation Contracts\n\n- Keep backend routes on Hono; do not introduce a parallel API framework.\n- Keep `/api/*` on Hono and non-API paths on Vite/static frontend.\n- `web/src/api.ts` owns browser fetch behavior, credential inclusion, refresh retry, and unauthorized events.\n- `web/src/api.ts` must use `hc<AppType>` from `api/app/hono.ts`; do not duplicate API request/response types by hand.\n- Shared request/response validation should use schemas under `shared/schemas/` when the shape is used on both sides.\n- `/api/auth/me` is protected by `requireAuth`; public pages should not require login by default.\n- Auth cookies and tokens live under `api/modules/auth/`.\n- DB defaults, `.env.example`, and Drizzle config must agree.\n- `JWT_SECRET` is optional only for local development; production must fail closed when it is missing or still set to the dev default.\n- `drizzle.config.ts` should resolve `DATABASE_URL` from process env first, then local `.env`, then app defaults.\n- Do not reintroduce RAG, pgvector, wiki, provider, or agentic-search docs unless the implementation is restored in code.\n\n## Verification Matrix\n\n| Change type | Minimum useful verification |\n| --- | --- |\n| Auth/backend | `bun run typecheck` and targeted Vitest when tests are touched |\n| Frontend UI | `bun run typecheck` and `bun run build` |\n| Env/DB/docs | `bun run typecheck`, `bun run lint`, `bun run format:check` |\n| Broad template change | `bun run verify` |\n\n## Commands\n\n| Command | Purpose |\n| --- | --- |\n| `bun install` | Install dependencies |\n| `bun run dev` | Start Vite + Hono dev server |\n| `bun run db:migrate` | Apply SQL migrations |\n| `bun run auth:create-admin -- --email <email> --name <name>` | Create admin user |\n| `bun run typecheck` | TypeScript check |\n| `bun run test` | Vitest |\n| `bun run build` | Vite production build |\n| `bun run verify` | Full local verification pipeline |\n\n## Clone Adaptation Checklist\n\n- Set `DATABASE_URL` when using a non-default SQLite database path.\n- Set a production-grade `JWT_SECRET`.\n- Set `APP_URL`, `CORS_ORIGINS`, cookie secure mode, and security headers for the deployment protocol.\n- Create an admin user before expecting login to succeed.\n- Rename package metadata and README copy for the target app.\n",
+          "packageJson": {
+            "name": "hono-standard",
+            "version": "1.0.0",
+            "description": "Minimal Hono + React template with optional login and showcase screens.",
+            "type": "module",
+            "author": "",
+            "license": "MIT",
+            "keywords": [
+              "hono",
+              "react",
+              "vite",
+              "typescript"
+            ],
+            "scripts": {
+              "dev": "bunx --bun vite",
+              "dev:vite": "vite",
+              "start": "bun run api/app/server.ts",
+              "auth:create-admin": "bun run api/cli/auth-create-admin.ts",
+              "db:generate": "drizzle-kit generate",
+              "db:migrate": "bun run api/cli/migrate.ts",
+              "db:migrate:drizzle": "drizzle-kit migrate",
+              "test": "vitest run",
+              "test:watch": "vitest",
+              "typecheck": "tsc --noEmit",
+              "lint": "biome lint api web shared",
+              "format": "biome format --write api web shared",
+              "format:check": "biome format api web shared",
+              "build:web": "vite build",
+              "build": "bun run build:web",
+              "verify": "bun scripts/verify.ts",
+              "verify:strict": "bun run verify"
+            },
+            "files": [
+              "dist-web",
+              "README.md",
+              "LICENSE.md",
+              "package.json"
+            ],
+            "dependencies": {
+              "@hono/zod-validator": "0.8.0",
+              "@tanstack/react-query": "5.101.0",
+              "@tanstack/react-router": "1.170.15",
+              "@tanstack/react-table": "8.21.3",
+              "drizzle-orm": "0.45.2",
+              "hono": "4.12.25",
+              "jose": "6.2.3",
+              "lucide-react": "1.18.0",
+              "react": "19.2.7",
+              "react-dom": "19.2.7",
+              "react-hook-form": "^7.79.0",
+              "zod": "4.4.3"
+            },
+            "devDependencies": {
+              "@biomejs/biome": "2.5.0",
+              "@hono/vite-dev-server": "0.26.0",
+              "@tailwindcss/vite": "^4.3.1",
+              "@types/bun": "1.3.14",
+              "@types/node": "25.9.3",
+              "@types/react": "19.2.17",
+              "@types/react-dom": "19.2.3",
+              "@vitejs/plugin-react": "6.0.2",
+              "drizzle-kit": "0.31.10",
+              "tailwindcss": "^4.3.1",
+              "typescript": "5.9.3",
+              "vite": "8.0.16",
+              "vitest": "4.1.8"
+            },
+            "overrides": {
+              "esbuild": "0.28.1",
+              "picomatch": "4.0.4",
+              "postcss": "8.5.15",
+              "rollup": "4.62.0",
+              "undici": "7.27.2",
+              "vite": "8.0.16",
+              "ws": "8.21.0"
+            }
+          },
+          "repoTree": [
+            ".dockerignore",
+            ".env.example",
+            ".gitignore",
+            ".husky/",
+            ".husky/pre-commit",
+            ".husky/pre-push",
+            "api/",
+            "api/app/",
+            "api/app/env.test.ts",
+            "api/app/env.ts",
+            "api/app/hono.test.ts",
+            "api/app/hono.ts",
+            "api/app/server.ts",
+            "api/cli/",
+            "api/cli/auth-create-admin.ts",
+            "api/cli/migrate.ts",
+            "api/config/",
+            "api/config/appDefaults.ts",
+            "api/db/",
+            "api/db/index.ts",
+            "api/db/schema.ts",
+            "api/middleware/",
+            "api/middleware/auth.test.ts",
+            "api/middleware/auth.ts",
+            "api/modules/",
+            "api/modules/auth/",
+            "api/modules/auth/auth-cookies.test.ts",
+            "api/modules/auth/auth-cookies.ts",
+            "api/modules/auth/auth.service.test.ts",
+            "api/modules/auth/auth.service.ts",
+            "api/modules/auth/context.test.ts",
+            "api/modules/auth/context.ts",
+            "api/modules/auth/errors.test.ts",
+            "api/modules/auth/errors.ts",
+            "api/modules/auth/password.test.ts",
+            "api/modules/auth/password.ts",
+            "api/modules/auth/token.service.test.ts",
+            "api/modules/auth/token.service.ts",
+            "api/modules/auth/types.test.ts",
+            "api/modules/auth/types.ts",
+            "api/routes/",
+            "api/routes/auth.route.test.ts",
+            "api/routes/auth.route.ts",
+            "api/routes/health.route.test.ts",
+            "api/routes/health.route.ts",
+            "api/routes/todo.route.test.ts",
+            "api/routes/todo.route.ts",
+            "api/types/",
+            "api/types/hono-context.d.ts",
+            "biome.json",
+            "bun.lock",
+            "bunfig.toml",
+            "docs/",
+            "docs/template-variant-management.md",
+            "drizzle/",
+            "drizzle/0001_auth.sql",
+            "drizzle/0002_todo_items.sql",
+            "drizzle.config.ts",
+            "LLM_CONTEXT.md",
+            "package.json",
+            "README.md",
+            "scripts/",
+            "scripts/verify.ts",
+            "shared/",
+            "shared/schemas/",
+            "shared/schemas/auth.schema.ts",
+            "tsconfig.build.json",
+            "tsconfig.json",
+            "vite.config.ts",
+            "vitest.config.ts",
+            "web/",
+            "web/index.html",
+            "web/src/",
+            "web/src/api.ts",
+            "web/src/App.tsx",
+            "web/src/auth-context.tsx",
+            "web/src/domains/",
+            "web/src/domains/auth/",
+            "web/src/main.tsx",
+            "web/src/router.tsx",
+            "web/src/routes/",
+            "web/src/routes/home-route.tsx",
+            "web/src/routes/login-route.tsx",
+            "web/src/routes/root-route.tsx",
+            "web/src/routes/showcase-route.tsx",
+            "web/src/routes/todo-list-route.tsx",
+            "web/src/showcase-settings-context.tsx",
+            "web/src/showcase-table-search.ts",
+            "web/src/styles.css",
+            "web/src/views/",
+            "web/src/views/home-view.tsx",
+            "web/src/views/login-view.tsx",
+            "web/src/views/showcase-view.tsx",
+            "web/src/views/todo-list-view.tsx"
+          ],
+          "scripts": {
+            "dev": "bunx --bun vite",
+            "dev:vite": "vite",
+            "start": "bun run api/app/server.ts",
+            "auth:create-admin": "bun run api/cli/auth-create-admin.ts",
+            "db:generate": "drizzle-kit generate",
+            "db:migrate": "bun run api/cli/migrate.ts",
+            "db:migrate:drizzle": "drizzle-kit migrate",
+            "test": "vitest run",
+            "test:watch": "vitest",
+            "typecheck": "tsc --noEmit",
+            "lint": "biome lint api web shared",
+            "format": "biome format --write api web shared",
+            "format:check": "biome format api web shared",
+            "build:web": "vite build",
+            "build": "bun run build:web",
+            "verify": "bun scripts/verify.ts",
+            "verify:strict": "bun run verify"
+          }
+        }
+      },
+      "systemContext": {
+        "targetProjectName": "todolist",
+        "targetProjectRoot": "/Users/y.noguchi/Code/todolist",
+        "projectIdeal": "このプロジェクトが、対象ユーザーに明確な価値を提供し、実装・検証・文書・agent usability が揃った状態。",
+        "primaryAudience": "coding agents",
+        "targetWorkflow": "evaluate project value and generate next improvements",
+        "nonGoals": []
+      },
+      "readme": "# Hono Standard\n\n[![Bun](https://img.shields.io/badge/Bun-%23000000.svg?style=for-the-badge&logo=bun&logoColor=white)](https://bun.sh/)\n[![Hono](https://img.shields.io/badge/Hono-%23E36022.svg?style=for-the-badge&logo=hono&logoColor=white)](https://hono.dev/)\n[![React](https://img.shields.io/badge/React-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)](https://react.dev/)\n[![SQLite](https://img.shields.io/badge/SQLite-003B57.svg?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)\n[![TypeScript](https://img.shields.io/badge/TypeScript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)\n[![MIT License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE.md)\n\nHono backend と React + Vite frontend を同一 origin で動かす、local SQLite 対応の Web app template です。Drizzle のユーザー認証、httpOnly Cookie による access / refresh token、React Router ベースの画面、コンポーネント showcase を含みます。\n\n## 構成\n\n| Path | Role |\n| --- | --- |\n| `api/app/hono.ts` | Hono app composition。middleware、API route、静的配信、`AppType` を登録 |\n| `api/app/server.ts` | Bun server bootstrap |\n| `api/app/env.ts` | runtime env parser |\n| `api/config/appDefaults.ts` | 非シークレットの既定値 |\n| `api/db/schema.ts` | Drizzle SQLite schema |\n| `api/routes/auth.route.ts` | `/api/auth/*` route |\n| `api/routes/health.route.ts` | `/api/health` route |\n| `api/modules/auth/` | password hash、JWT、cookie、auth service |\n| `api/middleware/auth.ts` | protected API middleware |\n| `web/src/` | React frontend |\n| `shared/schemas/` | frontend/backend で共有する Zod schema と API object type |\n| `drizzle/` | SQL migrations |\n| `scripts/verify.ts` | typecheck / lint / format / test / build の検証 pipeline |\n\n## 前提\n\n| Tool | 用途 |\n| --- | --- |\n| Bun | package manager、runtime、scripts |\n| SQLite | auth user / refresh token storage |\n\n## セットアップ\n\n```bash\nbun install\ncp .env.example .env\nbun run db:migrate\nbun run auth:create-admin -- --email admin@example.com --name \"Admin User\"\nbun run dev\n```\n\n`auth:create-admin` は対話で password を読みます。自動化する場合は次のように標準入力から渡せます。\n\n```bash\nprintf '%s\\n' '<password>' | bun run auth:create-admin -- --email admin@example.com --name \"Admin User\" --password-stdin\n```\n\n開発サーバーは `http://localhost:5173` で起動します。Vite dev server が frontend を配信し、`/api/*` は Hono に渡されます。\n\n## 環境変数\n\n非シークレットの既定値は `api/config/appDefaults.ts` にあります。`.env.example` は local development 向けの値です。\n\n| Variable | Required | Description | Default |\n| --- | --- | --- | --- |\n| `NODE_ENV` | no | `development` / `test` / `production` | `development` |\n| `DATABASE_URL` | no | SQLite database file path | `sqlite.db` |\n| `JWT_SECRET` | production yes | JWT signing secret。32 文字以上。production では未設定または dev default のままだと起動しません | dev default |\n| `APP_URL` | no | public origin。cookie secure 既定値と CORS に使う | `http://localhost:5173` |\n| `CORS_ORIGINS` | no | 追加許可 origin。カンマ区切り | `http://localhost:5173` |\n| `AUTH_COOKIE_SECURE` | no | auth cookie に `Secure` を付けるか | production/HTTPS では `true` |\n| `AUTH_COOKIE_SAME_SITE` | no | auth cookie SameSite | `lax` |\n| `SECURITY_HEADERS_MODE` | no | HTTPS 前提 header の有効化方針。`auto` / `http` / `https` | `auto` |\n\n`AUTH_COOKIE_SAME_SITE=none` を使う場合は、HTTPS の `APP_URL` または `AUTH_COOKIE_SECURE=true` が必要です。\n\n## Scripts\n\n| Command | Purpose |\n| --- | --- |\n| `bun run dev` | Vite + Hono dev server |\n| `bun run start` | Bun server を直接起動 |\n| `bun run auth:create-admin -- --email <email> --name \"<name>\"` | admin user 作成 |\n| `bun run db:migrate` | `drizzle/*.sql` を順番に適用 |\n| `bun run db:generate` | Drizzle migration 生成 |\n| `bun run db:migrate:drizzle` | drizzle-kit migration。`DATABASE_URL` は process env または `.env` から読む |\n| `bun run typecheck` | TypeScript check |\n| `bun run lint` | Biome lint |\n| `bun run format` | Biome format write |\n| `bun run format:check` | Biome format check |\n| `bun run test` | Vitest |\n| `bun run build` | Vite production build |\n| `bun run verify` | typecheck、lint、format:check、test、build |\n\n## API\n\n| Method | Path | Description |\n| --- | --- | --- |\n| `GET` | `/api/health` | health check |\n| `POST` | `/api/auth/login` | email/password login。httpOnly cookie を設定 |\n| `POST` | `/api/auth/refresh` | refresh token rotation |\n| `POST` | `/api/auth/logout` | refresh token revoke と cookie clear |\n| `GET` | `/api/auth/me` | 現在の login user |\n\n`/api/auth/me` は access token が必要です。frontend client は 401 を受けると `/api/auth/refresh` を一度試し、成功した場合だけ元の request を再実行します。\n\nAPI request / response の共有 schema は `shared/schemas/` に置きます。Backend route はその schema を `zValidator` で使い、frontend は `api/app/hono.ts` から export される `AppType` を `hono/client` に渡して API 型を共有します。\n\n## Build / Runtime\n\n```bash\nbun run build\nNODE_ENV=production bun run start\n```\n\nproduction では `JWT_SECRET` を必ず強いランダム値に変更してください。未設定または dev default のままの場合、アプリは起動時に失敗します。HTTPS で公開する場合は `APP_URL=https://...` とし、必要に応じて `AUTH_COOKIE_SECURE=true`、`SECURITY_HEADERS_MODE=https` を明示します。\n\n## Template Notes\n\n- この branch は RAG / pgvector / agentic search template ではありません。\n- 認証は optional UI として残しています。Home と Showcase は未ログインでも表示されます。\n- SQLite は auth user と refresh token 保存に使います。\n- clone 後は `package.json` の name / description、README、`.env.example`、DB 名、cookie/CORS/security 設定を利用先に合わせて見直してください。\n",
+      "llmContext": "# LLM Context: Hono Standard\n\nこの文書は、`hono-standard` を clone した直後に作業入口を決めるための圧縮コンテキストです。現行 branch は local SQLite auth/showcase template です。RAG、pgvector、agentic search、wiki ingestion は含みません。\n\n## Repository Snapshot\n\n- Bun + Hono backend と React + Vite frontend を同一 origin で動かす template。\n- DB は local SQLite。Drizzle schema は `api/db/schema.ts`、migration は `drizzle/`。\n- Backend app composition は `api/app/hono.ts`、server bootstrap は `api/app/server.ts`。\n- Frontend entry は `web/src/App.tsx`、router は `web/src/router.tsx`、API client は `web/src/api.ts`。\n- Auth 実装は `api/modules/auth/`、route は `api/routes/auth.route.ts`、login UI は `web/src/domains/auth/login-domain.tsx`。\n- Shared API schema/object は `shared/schemas/`。Backend は `zValidator`、frontend は `hono/client` + `AppType` で同じ契約を参照する。\n- Home と Showcase は未ログインでも表示する。ログイン状態がある場合だけ header に user chip と logout button を表示する。\n- Package manager / runtime は Bun。dev server は `bunx --bun vite` で起動する。\n\n## Top-Level Map\n\n| Path | Role |\n| --- | --- |\n| `api/app/hono.ts` | Hono middleware、API route、static fallback、`AppType` export |\n| `api/app/server.ts` | Bun server bootstrap |\n| `api/app/env.ts` | environment parsing and defaults |\n| `api/config/appDefaults.ts` | non-secret app defaults |\n| `api/db/` | SQLite connection and Drizzle schema |\n| `api/routes/auth.route.ts` | `/api/auth/*` route module |\n| `api/routes/health.route.ts` | health route |\n| `api/modules/auth/` | Auth service、JWT、cookies、password hashing |\n| `api/middleware/auth.ts` | access-token auth middleware |\n| `shared/schemas/` | Zod schema and public API object types shared by api and web |\n| `web/src/App.tsx` | React Query and Router providers |\n| `web/src/router.tsx` | TanStack Router tree |\n| `web/src/api.ts` | browser API client and auth refresh handling |\n| `web/src/auth-context.tsx` | frontend auth state |\n| `web/src/routes/` | route definitions |\n| `web/src/views/` | Home/Login/Showcase views |\n| `web/src/showcase-*` | showcase state and URL search helpers |\n| `drizzle/` | SQL migrations |\n| `scripts/verify.ts` | verification pipeline |\n\n## Task Routing\n\n| Task | Start here | Usually also read | Defer unless touched |\n| --- | --- | --- | --- |\n| Change auth API | `api/routes/auth.route.ts`, `api/modules/auth/`, `api/middleware/auth.ts`, `shared/schemas/auth.schema.ts` | `web/src/api.ts`, `web/src/auth-context.tsx` | showcase UI |\n| Change login UI | `web/src/views/login-view.tsx`, `web/src/domains/auth/login-domain.tsx` | `web/src/auth-context.tsx`, `web/src/api.ts` | DB schema |\n| Change app shell/routing | `web/src/routes/root-route.tsx`, `web/src/router.tsx` | `web/src/App.tsx`, affected view | auth service internals |\n| Change showcase UI | `web/src/views/showcase-view.tsx`, `web/src/showcase-settings-context.tsx`, `web/src/showcase-table-search.ts` | `web/src/styles.css` | backend auth |\n| Change env/config | `api/app/env.ts`, `api/config/appDefaults.ts`, `.env.example` | `drizzle.config.ts` | frontend views |\n| Change DB schema/migration | `api/db/schema.ts`, `drizzle/`, `api/cli/migrate.ts` | `api/modules/auth/auth.service.ts`, `api/modules/auth/token.service.ts` | showcase UI |\n| Change build/dev tooling | `package.json`, `vite.config.ts`, `vitest.config.ts`, `scripts/verify.ts` | failing config-specific output | feature code |\n\n## Implementation Contracts\n\n- Keep backend routes on Hono; do not introduce a parallel API framework.\n- Keep `/api/*` on Hono and non-API paths on Vite/static frontend.\n- `web/src/api.ts` owns browser fetch behavior, credential inclusion, refresh retry, and unauthorized events.\n- `web/src/api.ts` must use `hc<AppType>` from `api/app/hono.ts`; do not duplicate API request/response types by hand.\n- Shared request/response validation should use schemas under `shared/schemas/` when the shape is used on both sides.\n- `/api/auth/me` is protected by `requireAuth`; public pages should not require login by default.\n- Auth cookies and tokens live under `api/modules/auth/`.\n- DB defaults, `.env.example`, and Drizzle config must agree.\n- `JWT_SECRET` is optional only for local development; production must fail closed when it is missing or still set to the dev default.\n- `drizzle.config.ts` should resolve `DATABASE_URL` from process env first, then local `.env`, then app defaults.\n- Do not reintroduce RAG, pgvector, wiki, provider, or agentic-search docs unless the implementation is restored in code.\n\n## Verification Matrix\n\n| Change type | Minimum useful verification |\n| --- | --- |\n| Auth/backend | `bun run typecheck` and targeted Vitest when tests are touched |\n| Frontend UI | `bun run typecheck` and `bun run build` |\n| Env/DB/docs | `bun run typecheck`, `bun run lint`, `bun run format:check` |\n| Broad template change | `bun run verify` |\n\n## Commands\n\n| Command | Purpose |\n| --- | --- |\n| `bun install` | Install dependencies |\n| `bun run dev` | Start Vite + Hono dev server |\n| `bun run db:migrate` | Apply SQL migrations |\n| `bun run auth:create-admin -- --email <email> --name <name>` | Create admin user |\n| `bun run typecheck` | TypeScript check |\n| `bun run test` | Vitest |\n| `bun run build` | Vite production build |\n| `bun run verify` | Full local verification pipeline |\n\n## Clone Adaptation Checklist\n\n- Set `DATABASE_URL` when using a non-default SQLite database path.\n- Set a production-grade `JWT_SECRET`.\n- Set `APP_URL`, `CORS_ORIGINS`, cookie secure mode, and security headers for the deployment protocol.\n- Create an admin user before expecting login to succeed.\n- Rename package metadata and README copy for the target app.\n",
+      "packageJson": {
+        "name": "hono-standard",
+        "version": "1.0.0",
+        "description": "Minimal Hono + React template with optional login and showcase screens.",
+        "type": "module",
+        "author": "",
+        "license": "MIT",
+        "keywords": [
+          "hono",
+          "react",
+          "vite",
+          "typescript"
+        ],
+        "scripts": {
+          "dev": "bunx --bun vite",
+          "dev:vite": "vite",
+          "start": "bun run api/app/server.ts",
+          "auth:create-admin": "bun run api/cli/auth-create-admin.ts",
+          "db:generate": "drizzle-kit generate",
+          "db:migrate": "bun run api/cli/migrate.ts",
+          "db:migrate:drizzle": "drizzle-kit migrate",
+          "test": "vitest run",
+          "test:watch": "vitest",
+          "typecheck": "tsc --noEmit",
+          "lint": "biome lint api web shared",
+          "format": "biome format --write api web shared",
+          "format:check": "biome format api web shared",
+          "build:web": "vite build",
+          "build": "bun run build:web",
+          "verify": "bun scripts/verify.ts",
+          "verify:strict": "bun run verify"
+        },
+        "files": [
+          "dist-web",
+          "README.md",
+          "LICENSE.md",
+          "package.json"
+        ],
+        "dependencies": {
+          "@hono/zod-validator": "0.8.0",
+          "@tanstack/react-query": "5.101.0",
+          "@tanstack/react-router": "1.170.15",
+          "@tanstack/react-table": "8.21.3",
+          "drizzle-orm": "0.45.2",
+          "hono": "4.12.25",
+          "jose": "6.2.3",
+          "lucide-react": "1.18.0",
+          "react": "19.2.7",
+          "react-dom": "19.2.7",
+          "react-hook-form": "^7.79.0",
+          "zod": "4.4.3"
+        },
+        "devDependencies": {
+          "@biomejs/biome": "2.5.0",
+          "@hono/vite-dev-server": "0.26.0",
+          "@tailwindcss/vite": "^4.3.1",
+          "@types/bun": "1.3.14",
+          "@types/node": "25.9.3",
+          "@types/react": "19.2.17",
+          "@types/react-dom": "19.2.3",
+          "@vitejs/plugin-react": "6.0.2",
+          "drizzle-kit": "0.31.10",
+          "tailwindcss": "^4.3.1",
+          "typescript": "5.9.3",
+          "vite": "8.0.16",
+          "vitest": "4.1.8"
+        },
+        "overrides": {
+          "esbuild": "0.28.1",
+          "picomatch": "4.0.4",
+          "postcss": "8.5.15",
+          "rollup": "4.62.0",
+          "undici": "7.27.2",
+          "vite": "8.0.16",
+          "ws": "8.21.0"
+        }
+      },
+      "repoTree": [
+        ".dockerignore",
+        ".env.example",
+        ".gitignore",
+        ".husky/",
+        ".husky/pre-commit",
+        ".husky/pre-push",
+        "api/",
+        "api/app/",
+        "api/app/env.test.ts",
+        "api/app/env.ts",
+        "api/app/hono.test.ts",
+        "api/app/hono.ts",
+        "api/app/server.ts",
+        "api/cli/",
+        "api/cli/auth-create-admin.ts",
+        "api/cli/migrate.ts",
+        "api/config/",
+        "api/config/appDefaults.ts",
+        "api/db/",
+        "api/db/index.ts",
+        "api/db/schema.ts",
+        "api/middleware/",
+        "api/middleware/auth.test.ts",
+        "api/middleware/auth.ts",
+        "api/modules/",
+        "api/modules/auth/",
+        "api/modules/auth/auth-cookies.test.ts",
+        "api/modules/auth/auth-cookies.ts",
+        "api/modules/auth/auth.service.test.ts",
+        "api/modules/auth/auth.service.ts",
+        "api/modules/auth/context.test.ts",
+        "api/modules/auth/context.ts",
+        "api/modules/auth/errors.test.ts",
+        "api/modules/auth/errors.ts",
+        "api/modules/auth/password.test.ts",
+        "api/modules/auth/password.ts",
+        "api/modules/auth/token.service.test.ts",
+        "api/modules/auth/token.service.ts",
+        "api/modules/auth/types.test.ts",
+        "api/modules/auth/types.ts",
+        "api/routes/",
+        "api/routes/auth.route.test.ts",
+        "api/routes/auth.route.ts",
+        "api/routes/health.route.test.ts",
+        "api/routes/health.route.ts",
+        "api/routes/todo.route.test.ts",
+        "api/routes/todo.route.ts",
+        "api/types/",
+        "api/types/hono-context.d.ts",
+        "biome.json",
+        "bun.lock",
+        "bunfig.toml",
+        "docs/",
+        "docs/template-variant-management.md",
+        "drizzle/",
+        "drizzle/0001_auth.sql",
+        "drizzle/0002_todo_items.sql",
+        "drizzle.config.ts",
+        "LLM_CONTEXT.md",
+        "package.json",
+        "README.md",
+        "scripts/",
+        "scripts/verify.ts",
+        "shared/",
+        "shared/schemas/",
+        "shared/schemas/auth.schema.ts",
+        "tsconfig.build.json",
+        "tsconfig.json",
+        "vite.config.ts",
+        "vitest.config.ts",
+        "web/",
+        "web/index.html",
+        "web/src/",
+        "web/src/api.ts",
+        "web/src/App.tsx",
+        "web/src/auth-context.tsx",
+        "web/src/domains/",
+        "web/src/domains/auth/",
+        "web/src/main.tsx",
+        "web/src/router.tsx",
+        "web/src/routes/",
+        "web/src/routes/home-route.tsx",
+        "web/src/routes/login-route.tsx",
+        "web/src/routes/root-route.tsx",
+        "web/src/routes/showcase-route.tsx",
+        "web/src/routes/todo-list-route.tsx",
+        "web/src/showcase-settings-context.tsx",
+        "web/src/showcase-table-search.ts",
+        "web/src/styles.css",
+        "web/src/views/",
+        "web/src/views/home-view.tsx",
+        "web/src/views/login-view.tsx",
+        "web/src/views/showcase-view.tsx",
+        "web/src/views/todo-list-view.tsx"
+      ],
+      "scripts": {
+        "dev": "bunx --bun vite",
+        "dev:vite": "vite",
+        "start": "bun run api/app/server.ts",
+        "auth:create-admin": "bun run api/cli/auth-create-admin.ts",
+        "db:generate": "drizzle-kit generate",
+        "db:migrate": "bun run api/cli/migrate.ts",
+        "db:migrate:drizzle": "drizzle-kit migrate",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit",
+        "lint": "biome lint api web shared",
+        "format": "biome format --write api web shared",
+        "format:check": "biome format api web shared",
+        "build:web": "vite build",
+        "build": "bun run build:web",
+        "verify": "bun scripts/verify.ts",
+        "verify:strict": "bun run verify"
+      },
+      "sourceInspectionPlan": [],
+      "sourceFiles": [],
+      "verificationRuns": [],
+      "previousEvaluation": {
+        "id": "de09bc07-5d20-4bc1-ac56-dae0f7e27ecc",
+        "projectId": "ecebbb45-67a4-48a1-a198-f98229ce79b3",
+        "bundleId": "a8ba4b36-31eb-4d1b-8077-cc9aad268456",
+        "score": 72,
+        "idealScore": 100,
+        "overallConfidence": 0.64,
+        "evidenceLevel": "repo-structure",
+        "summary": "Surface and repository-structure evidence were evaluated. Runtime and audit-grade claims remain provisional.",
+        "dimensions": [
+          {
+            "key": "conceptValue",
+            "score": 88,
+            "confidence": 0.81,
+            "rationale": "Concept Value was evaluated from README.md, LLM_CONTEXT.md, package.json, repo tree.",
+            "evidenceRefs": [
+              "README.md",
+              "LLM_CONTEXT.md",
+              "package.json",
+              "repo tree"
+            ],
+            "caveats": [
+              "Evaluation is based on surface and repository-structure evidence."
+            ]
+          },
+          {
+            "key": "implementationCompleteness",
+            "score": 81,
+            "confidence": 0.65,
+            "rationale": "Implementation Completeness was evaluated from README.md, LLM_CONTEXT.md, package.json, repo tree.",
+            "evidenceRefs": [
+              "README.md",
+              "LLM_CONTEXT.md",
+              "package.json",
+              "repo tree"
+            ],
+            "caveats": [
+              "Evaluation is based on surface and repository-structure evidence."
+            ]
+          },
+          {
+            "key": "architectureQuality",
+            "score": 76,
+            "confidence": 0.67,
+            "rationale": "Architecture Quality was evaluated from README.md, LLM_CONTEXT.md, package.json, repo tree.",
+            "evidenceRefs": [
+              "README.md",
+              "LLM_CONTEXT.md",
+              "package.json",
+              "repo tree"
+            ],
+            "caveats": [
+              "Evaluation is based on surface and repository-structure evidence."
+            ]
+          },
+          {
+            "key": "maintainability",
+            "score": 64,
+            "confidence": 0.63,
+            "rationale": "Maintainability was evaluated from README.md, LLM_CONTEXT.md, package.json, repo tree.",
+            "evidenceRefs": [
+              "README.md",
+              "LLM_CONTEXT.md",
+              "package.json",
+              "repo tree"
+            ],
+            "caveats": [
+              "Evaluation is based on surface and repository-structure evidence."
+            ]
+          },
+          {
+            "key": "security",
+            "score": 68,
+            "confidence": 0.47,
+            "rationale": "Security was evaluated from README.md, LLM_CONTEXT.md, package.json, repo tree.",
+            "evidenceRefs": [
+              "README.md",
+              "LLM_CONTEXT.md",
+              "package.json",
+              "repo tree"
+            ],
+            "caveats": [
+              "Runtime behavior and implementation-level audit were not verified."
+            ]
+          },
+          {
+            "key": "testability",
+            "score": 73,
+            "confidence": 0.53,
+            "rationale": "Testability was evaluated from README.md, LLM_CONTEXT.md, package.json, repo tree.",
+            "evidenceRefs": [
+              "README.md",
+              "LLM_CONTEXT.md",
+              "package.json",
+              "repo tree"
+            ],
+            "caveats": [
+              "Evaluation is based on surface and repository-structure evidence."
+            ]
+          },
+          {
+            "key": "documentation",
+            "score": 66,
+            "confidence": 0.79,
+            "rationale": "Documentation was evaluated from README.md, LLM_CONTEXT.md, package.json, repo tree.",
+            "evidenceRefs": [
+              "README.md",
+              "LLM_CONTEXT.md",
+              "package.json",
+              "repo tree"
+            ],
+            "caveats": [
+              "Evaluation is based on surface and repository-structure evidence."
+            ]
+          },
+          {
+            "key": "agentUsability",
+            "score": 69,
+            "confidence": 0.73,
+            "rationale": "Agent Usability was evaluated from README.md, LLM_CONTEXT.md, package.json, repo tree.",
+            "evidenceRefs": [
+              "README.md",
+              "LLM_CONTEXT.md",
+              "package.json",
+              "repo tree"
+            ],
+            "caveats": [
+              "Evaluation is based on surface and repository-structure evidence."
+            ]
+          },
+          {
+            "key": "extensibility",
+            "score": 66,
+            "confidence": 0.63,
+            "rationale": "Extensibility was evaluated from README.md, LLM_CONTEXT.md, package.json, repo tree.",
+            "evidenceRefs": [
+              "README.md",
+              "LLM_CONTEXT.md",
+              "package.json",
+              "repo tree"
+            ],
+            "caveats": [
+              "Evaluation is based on surface and repository-structure evidence."
+            ]
+          },
+          {
+            "key": "reliability",
+            "score": 75,
+            "confidence": 0.41,
+            "rationale": "Reliability was evaluated from README.md, LLM_CONTEXT.md, package.json, repo tree.",
+            "evidenceRefs": [
+              "README.md",
+              "LLM_CONTEXT.md",
+              "package.json",
+              "repo tree"
+            ],
+            "caveats": [
+              "Runtime behavior and implementation-level audit were not verified."
+            ]
+          },
+          {
+            "key": "strategicFit",
+            "score": 63,
+            "confidence": 0.69,
+            "rationale": "Strategic Fit was evaluated from README.md, LLM_CONTEXT.md, package.json, repo tree.",
+            "evidenceRefs": [
+              "README.md",
+              "LLM_CONTEXT.md",
+              "package.json",
+              "repo tree"
+            ],
+            "caveats": [
+              "Evaluation is based on surface and repository-structure evidence."
+            ]
+          },
+          {
+            "key": "ossProductValue",
+            "score": 71,
+            "confidence": 0.67,
+            "rationale": "OSS / Product Value was evaluated from README.md, LLM_CONTEXT.md, package.json, repo tree.",
+            "evidenceRefs": [
+              "README.md",
+              "LLM_CONTEXT.md",
+              "package.json",
+              "repo tree"
+            ],
+            "caveats": [
+              "Evaluation is based on surface and repository-structure evidence."
+            ]
+          }
+        ],
+        "strengths": [
+          "README is available for concept evaluation.",
+          "package scripts are available for workflow inference.",
+          "Repository structure is available for architecture inference."
+        ],
+        "gapsTo100": [
+          {
+            "id": "849077d1-87f6-4dc3-b357-d15080eb2b0a",
+            "title": "テスト実行結果が未確認",
+            "kind": "runtime-gap",
+            "affectedDimensions": [
+              "testability",
+              "reliability"
+            ],
+            "currentEvidenceLevel": "repo-structure",
+            "expectedScoreGain": 0,
+            "expectedConfidenceGain": 0.16,
+            "rationale": "Score is provisional until tests or equivalent verification commands are executed."
+          },
+          {
+            "id": "c11f71c2-a770-494c-9b41-67663af851b5",
+            "title": "sample evaluation output が未確認",
+            "kind": "value-gap",
+            "affectedDimensions": [
+              "ossProductValue",
+              "agentUsability",
+              "documentation"
+            ],
+            "currentEvidenceLevel": "repo-structure",
+            "expectedScoreGain": 4,
+            "expectedConfidenceGain": 0.06,
+            "rationale": "A sample output makes the value and downstream handoff easier to inspect."
+          }
+        ],
+        "sourceInspections": [],
+        "notVerified": [
+          "local build",
+          "test execution",
+          "runtime behavior",
+          "sample output quality",
+          "audit-grade security behavior"
+        ],
+        "nextEvidenceToCollect": [
+          "Resolve missing inputs: AGENTS.md.",
+          "Run typecheck, tests, and build; attach command outcomes to the next evaluation.",
+          "Review the core implementation files for the evaluation pipeline.",
+          "Generate and inspect a sample evaluation report."
+        ],
+        "createdAt": "2026-06-28T01:52:42.000Z"
+      }
+    },
+    "inspectedInputs": {
+      "readme": true,
+      "llmContext": true,
+      "agents": false,
+      "packageJson": true,
+      "repoTree": true,
+      "sourceFilesSampled": [],
+      "testsExecuted": false,
+      "buildExecuted": false,
+      "appLaunched": false,
+      "sampleOutputReviewed": false
+    },
+    "missingInputs": [
+      "AGENTS.md"
+    ],
+    "notVerified": [
+      "ローカルビルド",
+      "テスト実行",
+      "ランタイム挙動",
+      "ソースコード全量の監査",
+      "サンプル出力の品質",
+      "監査級のセキュリティ挙動"
+    ],
+    "createdAt": "2026-06-28T06:33:58.000Z"
+  },
+  "evaluation": {
+    "id": "287a1347-4562-4ce3-bbbe-01050a097585",
+    "projectId": "ecebbb45-67a4-48a1-a198-f98229ce79b3",
+    "bundleId": "0250ec32-9fcc-46c6-8f96-e77b58a256be",
+    "score": 74,
+    "idealScore": 100,
+    "overallConfidence": 0.69,
+    "evidenceLevel": "repo-structure",
+    "summary": "Bun + Hono + React + SQLite の実用的なフルスタック雛形としては価値が高く、認証、共有スキーマ、検証スクリプト、LLM_CONTEXT まで揃っているため coding agents が次の改善に入りやすい構成です。一方で、評価対象名は todolist なのに README と package metadata は hono-standard template のままで、todo 機能の価値・操作・API が文書上ほぼ前面化されていません。実装は一定以上に揃っているように見えますが、今回は提供コンテキストのみのレビューであり、テストや実行結果は未確認です。",
+    "dimensions": [
+      {
+        "key": "conceptValue",
+        "score": 78,
+        "confidence": 0.72,
+        "rationale": "Hono backend と React frontend を同一 origin で扱うテンプレートとして明確な価値があります。認証、SQLite、showcase、todo route/view を含むため、アプリ開発の土台として使いやすいです。ただし projectName が todolist であるのに、README 上の主価値は汎用テンプレートであり、TODO アプリとしての独自価値は弱く見えます。",
+        "evidenceRefs": [
+          "README は local SQLite 対応の Web app template と説明している",
+          "package description は optional login and showcase screens を中心にしている",
+          "repoTree に api/routes/todo.route.ts と web/src/views/todo-list-view.tsx が存在する"
+        ],
+        "caveats": [
+          "TODO プロダクトとしての対象ユーザー、主要ワークフロー、差別化が明文化されていない",
+          "テンプレート価値と todolist 価値が混在している"
+        ]
+      },
+      {
+        "key": "implementationCompleteness",
+        "score": 76,
+        "confidence": 0.66,
+        "rationale": "API、DB migration、auth、frontend routes、tests、verify pipeline が揃っており、実装の面積は十分あります。todo route/view/test/migration も存在します。ただし README の API セクションには todo API がなく、提供情報だけでは todo 機能の完成度や UI 動線を確認できません。",
+        "evidenceRefs": [
+          "api/routes/auth.route.ts、health.route.ts、todo.route.ts が存在する",
+          "drizzle/0002_todo_items.sql が存在する",
+          "web/src/routes/todo-list-route.tsx と todo-list-view.tsx が存在する",
+          "Vitest test files が auth、middleware、routes に複数存在する"
+        ],
+        "caveats": [
+          "todo 機能の仕様、永続化、認可範囲が文書から読み取れない",
+          "実行・テスト結果が提供されていない"
+        ]
+      },
+      {
+        "key": "architectureQuality",
+        "score": 79,
+        "confidence": 0.7,
+        "rationale": "Hono app composition、route、module、middleware、shared schemas、frontend views が分離されており、標準的で追いやすい構造です。frontend/backend の API 型共有も良い設計です。一方で、TODO ドメインの shared schema が repoTree 上で見えず、auth 以外の契約共有がどこまで徹底されているかは不明です。",
+        "evidenceRefs": [
+          "api/app/hono.ts が AppType を export し、frontend が hono/client で参照する方針",
+          "api/modules/auth、api/middleware、api/routes の分離",
+          "shared/schemas/auth.schema.ts が存在する"
+        ],
+        "caveats": [
+          "todo の共有 schema が repoTree に見えない",
+          "template とアプリ固有機能の境界がまだ整理途上に見える"
+        ]
+      },
+      {
+        "key": "maintainability",
+        "score": 72,
+        "confidence": 0.68,
+        "rationale": "ディレクトリ構成、README、LLM_CONTEXT、verify script により保守の入口は整っています。Biome、TypeScript、Vitest もあり、変更時の基本的な品質維持が期待できます。ただし README/package metadata と実際の todolist 要素にズレがあり、将来の agent や開発者が目的を誤認しやすい状態です。",
+        "evidenceRefs": [
+          "scripts/verify.ts が typecheck、lint、format、test、build を束ねる",
+          "LLM_CONTEXT に task routing と implementation contracts がある",
+          "README に主要パスと scripts が整理されている"
+        ],
+        "caveats": [
+          "プロジェクト名・README・package description の整合性が不足",
+          "README の API 一覧が todo 実装を反映していない可能性がある"
+        ]
+      },
+      {
+        "key": "security",
+        "score": 74,
+        "confidence": 0.62,
+        "rationale": "httpOnly cookie、access/refresh token、JWT_SECRET の production fail closed、SameSite/Secure 条件など、テンプレートとして重要なセキュリティ配慮があります。auth 関連のテストも多く見えます。ただし実装詳細やテスト結果は未確認で、todo route に認可が適用されているかも提供情報だけでは判断できません。",
+        "evidenceRefs": [
+          "README に httpOnly Cookie による access / refresh token と記載",
+          "JWT_SECRET は production で未設定または dev default なら起動失敗と記載",
+          "AUTH_COOKIE_SAME_SITE=none では HTTPS または Secure が必要と記載",
+          "auth-cookies、token.service、auth middleware の test files が存在する"
+        ],
+        "caveats": [
+          "todo API の認証・認可境界が未確認",
+          "CSRF 対策や refresh token rotation の実装挙動は未検証"
+        ]
+      },
+      {
+        "key": "testability",
+        "score": 80,
+        "confidence": 0.7,
+        "rationale": "Vitest、typecheck、Biome、build をまとめた verify pipeline があり、backend/auth/route のテストファイルも多いためテスト可能性は高いです。todo route test も存在します。ただし今回のコンテキストには実行結果がなく、frontend UI のテスト有無も限定的に見えます。",
+        "evidenceRefs": [
+          "package scripts に test、typecheck、lint、format:check、build、verify がある",
+          "api/app、middleware、auth modules、routes に test files がある",
+          "api/routes/todo.route.test.ts が存在する"
+        ],
+        "caveats": [
+          "テスト成功結果が未提供",
+          "frontend の interaction や visual regression の検証は見えない"
+        ]
+      },
+      {
+        "key": "documentation",
+        "score": 71,
+        "confidence": 0.73,
+        "rationale": "README と LLM_CONTEXT は充実しており、setup、env、scripts、API、task routing、contracts がまとまっています。coding agent にとって入口は良いです。ただし todolist としての利用説明、todo API、画面操作、プロジェクト名の反映が不足しており、ドキュメントがテンプレート状態に寄っています。",
+        "evidenceRefs": [
+          "README に構成、セットアップ、環境変数、scripts、API がある",
+          "LLM_CONTEXT に Repository Snapshot、Task Routing、Verification Matrix がある",
+          "docs/template-variant-management.md が存在する"
+        ],
+        "caveats": [
+          "README が Hono Standard のままで todolist の説明が弱い",
+          "README API 表に todo endpoint がない"
+        ]
+      },
+      {
+        "key": "agentUsability",
+        "score": 84,
+        "confidence": 0.76,
+        "rationale": "LLM_CONTEXT が非常に agent 向けで、変更種別ごとの読むべきファイル、避けるべき復活要素、検証コマンドが整理されています。README も構造化されており、coding agents が安全に作業開始しやすいです。弱点は、プロジェクト名と実態のズレにより、agent がテンプレート改善と TODO アプリ改善を混同しやすい点です。",
+        "evidenceRefs": [
+          "LLM_CONTEXT に Task Routing と Implementation Contracts がある",
+          "Clone Adaptation Checklist がある",
+          "Verification Matrix が変更種別ごとに分かれている"
+        ],
+        "caveats": [
+          "todolist 固有の agent guidance が不足",
+          "README と package metadata の未更新が判断ノイズになる"
+        ]
+      },
+      {
+        "key": "extensibility",
+        "score": 76,
+        "confidence": 0.68,
+        "rationale": "route/module/schema/view の分離、Drizzle migrations、shared schemas、React Router により機能追加しやすい土台です。todo 機能も追加 migration と route/view で拡張されているように見えます。ただし todo schema やドメイン構造が README/LLM_CONTEXT に反映されていないため、拡張方針の明瞭さは少し落ちます。",
+        "evidenceRefs": [
+          "api/routes、api/modules、shared/schemas、web/src/views の分離",
+          "drizzle migration が auth と todo_items に分かれている",
+          "React Router の route files が機能別に存在する"
+        ],
+        "caveats": [
+          "todo ドメインの拡張契約が文書化されていない",
+          "テンプレート利用先の rename/adaptation が未完了に見える"
+        ]
+      },
+      {
+        "key": "reliability",
+        "score": 73,
+        "confidence": 0.63,
+        "rationale": "health route、migration script、verify pipeline、auth token rotation 方針など、信頼性を支える部品はあります。production JWT_SECRET の fail closed も良いです。ただし今回は起動確認、migration 適用、test 実行、build 成功が未確認であり、実運用時の信頼性は推定に留まります。",
+        "evidenceRefs": [
+          "GET /api/health がある",
+          "bun run db:migrate と verify script がある",
+          "production では弱い JWT_SECRET で起動失敗する設計が README に記載"
+        ],
+        "caveats": [
+          "runtime 動作は未確認",
+          "SQLite migration の実適用結果は未確認"
+        ]
+      },
+      {
+        "key": "strategicFit",
+        "score": 68,
+        "confidence": 0.71,
+        "rationale": "primaryAudience が coding agents であるなら、LLM_CONTEXT と構造化 README により戦略適合は高めです。しかし projectName は todolist で、package name/README は hono-standard template のままなので、評価対象としての戦略が曖昧です。TODO アプリとして伸ばすのか、標準テンプレートとして維持するのかを決める必要があります。",
+        "evidenceRefs": [
+          "primaryAudience は coding agents",
+          "targetWorkflow は evaluate project value and generate next improvements",
+          "package name は hono-standard",
+          "README title は Hono Standard"
+        ],
+        "caveats": [
+          "todolist と hono-standard の位置づけが矛盾している",
+          "プロジェクトの成功条件がテンプレート基準かアプリ基準か不明"
+        ]
+      },
+      {
+        "key": "ossProductValue",
+        "score": 70,
+        "confidence": 0.66,
+        "rationale": "MIT license、README、setup、scripts、env 説明があり、OSS テンプレートとして公開価値があります。依存関係も現代的で、Bun/Hono/React の標準例として有用です。一方で、todolist として公開するなら README、metadata、機能説明、スクリーンショット、利用シナリオが不足しています。",
+        "evidenceRefs": [
+          "license は MIT",
+          "README に setup と production runtime の説明がある",
+          "package files に dist-web、README、LICENSE、package.json が含まれる"
+        ],
+        "caveats": [
+          "OSS 利用者向けの todo 機能説明が不足",
+          "テンプレートの clone 後チェックリストが残っており完成品感を下げる"
+        ]
+      }
+    ],
+    "strengths": [
+      "Bun + Hono + React + SQLite の標準的なフルスタック構成がまとまっている",
+      "認証、cookie、JWT、refresh token、production secret guard など基礎的な security 設計がある",
+      "shared schema と AppType による frontend/backend 契約共有方針が明確",
+      "Vitest、Biome、TypeScript、build を束ねた verify pipeline がある",
+      "LLM_CONTEXT が agent の読む順序、変更境界、検証方針を具体的に支援している",
+      "todo route/view/migration/test が存在し、テンプレートから実アプリ化する足場がある"
+    ],
+    "gapsTo100": [
+      {
+        "id": "ba0b183b-77ee-4a64-a4ab-01d25574f949",
+        "title": "プロジェクトの位置づけを todolist に統一する",
+        "kind": "implementation-gap",
+        "affectedDimensions": [
+          "conceptValue",
+          "documentation",
+          "agentUsability",
+          "strategicFit",
+          "ossProductValue"
+        ],
+        "currentEvidenceLevel": "repo-structure",
+        "expectedScoreGain": 7,
+        "expectedConfidenceGain": 0.05,
+        "rationale": "README、package metadata、LLM_CONTEXT が template 名のままだと、評価・実装・OSS 利用のすべてで目的がぶれます。"
+      },
+      {
+        "id": "e873d951-875b-42b2-94a2-25d288a86d4f",
+        "title": "todo API と UI 仕様を README に追加する",
+        "kind": "implementation-gap",
+        "affectedDimensions": [
+          "implementationCompleteness",
+          "documentation",
+          "agentUsability",
+          "ossProductValue"
+        ],
+        "currentEvidenceLevel": "repo-structure",
+        "expectedScoreGain": 5,
+        "expectedConfidenceGain": 0.05,
+        "rationale": "todo route/view/migration が存在するのに、公開 API と画面操作が文書化されていないため、利用者と agent が機能を把握しにくいです。"
+      },
+      {
+        "id": "8f41e89a-1424-44ed-a92e-de4184711956",
+        "title": "verify 実行結果を評価可能な形で残す",
+        "kind": "implementation-gap",
+        "affectedDimensions": [
+          "testability",
+          "reliability",
+          "implementationCompleteness",
+          "ossProductValue"
+        ],
+        "currentEvidenceLevel": "repo-structure",
+        "expectedScoreGain": 6,
+        "expectedConfidenceGain": 0.05,
+        "rationale": "スクリプトとテストファイルは揃っていますが、成功実績がないため信頼性と完成度の評価が推定に留まります。"
+      },
+      {
+        "id": "d4677741-f0ff-4d85-8e52-e6a32cb86b77",
+        "title": "todo ドメインの shared schema を明確化する",
+        "kind": "implementation-gap",
+        "affectedDimensions": [
+          "architectureQuality",
+          "maintainability",
+          "extensibility",
+          "testability"
+        ],
+        "currentEvidenceLevel": "repo-structure",
+        "expectedScoreGain": 4,
+        "expectedConfidenceGain": 0.05,
+        "rationale": "auth は shared schema 方針が明確ですが、todo の契約共有が見えないため、API と frontend の型安全性が機能単位で揃っているか判断しにくいです。"
+      },
+      {
+        "id": "56d43ba4-9dc7-4fad-89ec-43411ed45a84",
+        "title": "TODO アプリとしての最小ユーザーフローを定義する",
+        "kind": "implementation-gap",
+        "affectedDimensions": [
+          "conceptValue",
+          "strategicFit",
+          "reliability",
+          "documentation"
+        ],
+        "currentEvidenceLevel": "repo-structure",
+        "expectedScoreGain": 5,
+        "expectedConfidenceGain": 0.05,
+        "rationale": "実装部品はありますが、ユーザーが何を達成できるアプリかが文書上曖昧です。完成条件を定義すると改善優先度が決めやすくなります。"
+      },
+      {
+        "id": "0444df22-f3ad-4993-8750-295b263ffb37",
+        "title": "OSS 利用者向けの実行確認情報を補強する",
+        "kind": "implementation-gap",
+        "affectedDimensions": [
+          "documentation",
+          "ossProductValue",
+          "reliability",
+          "agentUsability"
+        ],
+        "currentEvidenceLevel": "repo-structure",
+        "expectedScoreGain": 4,
+        "expectedConfidenceGain": 0.05,
+        "rationale": "セットアップ手順はありますが、初回起動後に何を見れば成功か、TODO 機能をどう試すかが不足しています。"
+      }
+    ],
+    "sourceInspections": [],
+    "notVerified": [
+      "追加コマンドは実行していないため、bun run verify、test、build の成否は未確認",
+      "EvaluationPromptContext に含まれないソース本文は確認していない",
+      "todo route/view の実際の挙動、認証要否、UI 品質は未確認",
+      "SQLite migration の実適用と runtime 起動は未確認",
+      "セキュリティ実装の詳細レビューや脆弱性検査は未実施"
+    ],
+    "nextEvidenceToCollect": [
+      "追加コマンドは実行していないため、bun run verify、test、build の成否は未確認",
+      "EvaluationPromptContext に含まれないソース本文は確認していない",
+      "todo route/view の実際の挙動、認証要否、UI 品質は未確認",
+      "SQLite migration の実適用と runtime 起動は未確認",
+      "セキュリティ実装の詳細レビューや脆弱性検査は未実施"
+    ],
+    "previousScore": 72,
+    "scoreDelta": 2,
+    "previousConfidence": 0.64,
+    "confidenceDelta": 0.05,
+    "baselinePrompt": "このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください",
+    "judgeSettings": {
+      "provider": "codex",
+      "model": "gpt-5.5",
+      "codexMode": "review-only",
+      "status": "ready"
+    },
+    "report": {
+      "schemaVersion": "project-evaluation-report/v1",
+      "baselinePrompt": "このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください",
+      "judge": {
+        "provider": "codex",
+        "model": "gpt-5.5",
+        "mode": "review-only"
+      },
+      "overallScore": 74,
+      "confidence": 0.69,
+      "summary": "Bun + Hono + React + SQLite の実用的なフルスタック雛形としては価値が高く、認証、共有スキーマ、検証スクリプト、LLM_CONTEXT まで揃っているため coding agents が次の改善に入りやすい構成です。一方で、評価対象名は todolist なのに README と package metadata は hono-standard template のままで、todo 機能の価値・操作・API が文書上ほぼ前面化されていません。実装は一定以上に揃っているように見えますが、今回は提供コンテキストのみのレビューであり、テストや実行結果は未確認です。",
+      "dimensions": [
+        {
+          "key": "conceptValue",
+          "label": "conceptValue",
+          "score": 78,
+          "confidence": 0.72,
+          "rationale": "Hono backend と React frontend を同一 origin で扱うテンプレートとして明確な価値があります。認証、SQLite、showcase、todo route/view を含むため、アプリ開発の土台として使いやすいです。ただし projectName が todolist であるのに、README 上の主価値は汎用テンプレートであり、TODO アプリとしての独自価値は弱く見えます。",
+          "evidence": [
+            "README は local SQLite 対応の Web app template と説明している",
+            "package description は optional login and showcase screens を中心にしている",
+            "repoTree に api/routes/todo.route.ts と web/src/views/todo-list-view.tsx が存在する"
+          ],
+          "concerns": [
+            "TODO プロダクトとしての対象ユーザー、主要ワークフロー、差別化が明文化されていない",
+            "テンプレート価値と todolist 価値が混在している"
+          ]
+        },
+        {
+          "key": "implementationCompleteness",
+          "label": "implementationCompleteness",
+          "score": 76,
+          "confidence": 0.66,
+          "rationale": "API、DB migration、auth、frontend routes、tests、verify pipeline が揃っており、実装の面積は十分あります。todo route/view/test/migration も存在します。ただし README の API セクションには todo API がなく、提供情報だけでは todo 機能の完成度や UI 動線を確認できません。",
+          "evidence": [
+            "api/routes/auth.route.ts、health.route.ts、todo.route.ts が存在する",
+            "drizzle/0002_todo_items.sql が存在する",
+            "web/src/routes/todo-list-route.tsx と todo-list-view.tsx が存在する",
+            "Vitest test files が auth、middleware、routes に複数存在する"
+          ],
+          "concerns": [
+            "todo 機能の仕様、永続化、認可範囲が文書から読み取れない",
+            "実行・テスト結果が提供されていない"
+          ]
+        },
+        {
+          "key": "architectureQuality",
+          "label": "architectureQuality",
+          "score": 79,
+          "confidence": 0.7,
+          "rationale": "Hono app composition、route、module、middleware、shared schemas、frontend views が分離されており、標準的で追いやすい構造です。frontend/backend の API 型共有も良い設計です。一方で、TODO ドメインの shared schema が repoTree 上で見えず、auth 以外の契約共有がどこまで徹底されているかは不明です。",
+          "evidence": [
+            "api/app/hono.ts が AppType を export し、frontend が hono/client で参照する方針",
+            "api/modules/auth、api/middleware、api/routes の分離",
+            "shared/schemas/auth.schema.ts が存在する"
+          ],
+          "concerns": [
+            "todo の共有 schema が repoTree に見えない",
+            "template とアプリ固有機能の境界がまだ整理途上に見える"
+          ]
+        },
+        {
+          "key": "maintainability",
+          "label": "maintainability",
+          "score": 72,
+          "confidence": 0.68,
+          "rationale": "ディレクトリ構成、README、LLM_CONTEXT、verify script により保守の入口は整っています。Biome、TypeScript、Vitest もあり、変更時の基本的な品質維持が期待できます。ただし README/package metadata と実際の todolist 要素にズレがあり、将来の agent や開発者が目的を誤認しやすい状態です。",
+          "evidence": [
+            "scripts/verify.ts が typecheck、lint、format、test、build を束ねる",
+            "LLM_CONTEXT に task routing と implementation contracts がある",
+            "README に主要パスと scripts が整理されている"
+          ],
+          "concerns": [
+            "プロジェクト名・README・package description の整合性が不足",
+            "README の API 一覧が todo 実装を反映していない可能性がある"
+          ]
+        },
+        {
+          "key": "security",
+          "label": "security",
+          "score": 74,
+          "confidence": 0.62,
+          "rationale": "httpOnly cookie、access/refresh token、JWT_SECRET の production fail closed、SameSite/Secure 条件など、テンプレートとして重要なセキュリティ配慮があります。auth 関連のテストも多く見えます。ただし実装詳細やテスト結果は未確認で、todo route に認可が適用されているかも提供情報だけでは判断できません。",
+          "evidence": [
+            "README に httpOnly Cookie による access / refresh token と記載",
+            "JWT_SECRET は production で未設定または dev default なら起動失敗と記載",
+            "AUTH_COOKIE_SAME_SITE=none では HTTPS または Secure が必要と記載",
+            "auth-cookies、token.service、auth middleware の test files が存在する"
+          ],
+          "concerns": [
+            "todo API の認証・認可境界が未確認",
+            "CSRF 対策や refresh token rotation の実装挙動は未検証"
+          ]
+        },
+        {
+          "key": "testability",
+          "label": "testability",
+          "score": 80,
+          "confidence": 0.7,
+          "rationale": "Vitest、typecheck、Biome、build をまとめた verify pipeline があり、backend/auth/route のテストファイルも多いためテスト可能性は高いです。todo route test も存在します。ただし今回のコンテキストには実行結果がなく、frontend UI のテスト有無も限定的に見えます。",
+          "evidence": [
+            "package scripts に test、typecheck、lint、format:check、build、verify がある",
+            "api/app、middleware、auth modules、routes に test files がある",
+            "api/routes/todo.route.test.ts が存在する"
+          ],
+          "concerns": [
+            "テスト成功結果が未提供",
+            "frontend の interaction や visual regression の検証は見えない"
+          ]
+        },
+        {
+          "key": "documentation",
+          "label": "documentation",
+          "score": 71,
+          "confidence": 0.73,
+          "rationale": "README と LLM_CONTEXT は充実しており、setup、env、scripts、API、task routing、contracts がまとまっています。coding agent にとって入口は良いです。ただし todolist としての利用説明、todo API、画面操作、プロジェクト名の反映が不足しており、ドキュメントがテンプレート状態に寄っています。",
+          "evidence": [
+            "README に構成、セットアップ、環境変数、scripts、API がある",
+            "LLM_CONTEXT に Repository Snapshot、Task Routing、Verification Matrix がある",
+            "docs/template-variant-management.md が存在する"
+          ],
+          "concerns": [
+            "README が Hono Standard のままで todolist の説明が弱い",
+            "README API 表に todo endpoint がない"
+          ]
+        },
+        {
+          "key": "agentUsability",
+          "label": "agentUsability",
+          "score": 84,
+          "confidence": 0.76,
+          "rationale": "LLM_CONTEXT が非常に agent 向けで、変更種別ごとの読むべきファイル、避けるべき復活要素、検証コマンドが整理されています。README も構造化されており、coding agents が安全に作業開始しやすいです。弱点は、プロジェクト名と実態のズレにより、agent がテンプレート改善と TODO アプリ改善を混同しやすい点です。",
+          "evidence": [
+            "LLM_CONTEXT に Task Routing と Implementation Contracts がある",
+            "Clone Adaptation Checklist がある",
+            "Verification Matrix が変更種別ごとに分かれている"
+          ],
+          "concerns": [
+            "todolist 固有の agent guidance が不足",
+            "README と package metadata の未更新が判断ノイズになる"
+          ]
+        },
+        {
+          "key": "extensibility",
+          "label": "extensibility",
+          "score": 76,
+          "confidence": 0.68,
+          "rationale": "route/module/schema/view の分離、Drizzle migrations、shared schemas、React Router により機能追加しやすい土台です。todo 機能も追加 migration と route/view で拡張されているように見えます。ただし todo schema やドメイン構造が README/LLM_CONTEXT に反映されていないため、拡張方針の明瞭さは少し落ちます。",
+          "evidence": [
+            "api/routes、api/modules、shared/schemas、web/src/views の分離",
+            "drizzle migration が auth と todo_items に分かれている",
+            "React Router の route files が機能別に存在する"
+          ],
+          "concerns": [
+            "todo ドメインの拡張契約が文書化されていない",
+            "テンプレート利用先の rename/adaptation が未完了に見える"
+          ]
+        },
+        {
+          "key": "reliability",
+          "label": "reliability",
+          "score": 73,
+          "confidence": 0.63,
+          "rationale": "health route、migration script、verify pipeline、auth token rotation 方針など、信頼性を支える部品はあります。production JWT_SECRET の fail closed も良いです。ただし今回は起動確認、migration 適用、test 実行、build 成功が未確認であり、実運用時の信頼性は推定に留まります。",
+          "evidence": [
+            "GET /api/health がある",
+            "bun run db:migrate と verify script がある",
+            "production では弱い JWT_SECRET で起動失敗する設計が README に記載"
+          ],
+          "concerns": [
+            "runtime 動作は未確認",
+            "SQLite migration の実適用結果は未確認"
+          ]
+        },
+        {
+          "key": "strategicFit",
+          "label": "strategicFit",
+          "score": 68,
+          "confidence": 0.71,
+          "rationale": "primaryAudience が coding agents であるなら、LLM_CONTEXT と構造化 README により戦略適合は高めです。しかし projectName は todolist で、package name/README は hono-standard template のままなので、評価対象としての戦略が曖昧です。TODO アプリとして伸ばすのか、標準テンプレートとして維持するのかを決める必要があります。",
+          "evidence": [
+            "primaryAudience は coding agents",
+            "targetWorkflow は evaluate project value and generate next improvements",
+            "package name は hono-standard",
+            "README title は Hono Standard"
+          ],
+          "concerns": [
+            "todolist と hono-standard の位置づけが矛盾している",
+            "プロジェクトの成功条件がテンプレート基準かアプリ基準か不明"
+          ]
+        },
+        {
+          "key": "ossProductValue",
+          "label": "ossProductValue",
+          "score": 70,
+          "confidence": 0.66,
+          "rationale": "MIT license、README、setup、scripts、env 説明があり、OSS テンプレートとして公開価値があります。依存関係も現代的で、Bun/Hono/React の標準例として有用です。一方で、todolist として公開するなら README、metadata、機能説明、スクリーンショット、利用シナリオが不足しています。",
+          "evidence": [
+            "license は MIT",
+            "README に setup と production runtime の説明がある",
+            "package files に dist-web、README、LICENSE、package.json が含まれる"
+          ],
+          "concerns": [
+            "OSS 利用者向けの todo 機能説明が不足",
+            "テンプレートの clone 後チェックリストが残っており完成品感を下げる"
+          ]
+        }
+      ],
+      "strengths": [
+        "Bun + Hono + React + SQLite の標準的なフルスタック構成がまとまっている",
+        "認証、cookie、JWT、refresh token、production secret guard など基礎的な security 設計がある",
+        "shared schema と AppType による frontend/backend 契約共有方針が明確",
+        "Vitest、Biome、TypeScript、build を束ねた verify pipeline がある",
+        "LLM_CONTEXT が agent の読む順序、変更境界、検証方針を具体的に支援している",
+        "todo route/view/migration/test が存在し、テンプレートから実アプリ化する足場がある"
+      ],
+      "weaknesses": [
+        "projectName は todolist だが README と package metadata は hono-standard template のままで整合していない",
+        "README の API セクションに todo endpoint がなく、todo 機能の仕様が見えにくい",
+        "実行結果、テスト結果、build 成功結果が提供コンテキスト内で未確認",
+        "TODO アプリとしての対象ユーザー、主要ワークフロー、完成条件が明文化されていない",
+        "frontend UI のテストや実際の画面品質に関する証拠が少ない",
+        "テンプレートとして残す範囲と todolist 固有に寄せる範囲が曖昧"
+      ],
+      "improvementIdeas": [
+        {
+          "title": "プロジェクトの位置づけを todolist に統一する",
+          "reason": "README、package metadata、LLM_CONTEXT が template 名のままだと、評価・実装・OSS 利用のすべてで目的がぶれます。",
+          "expectedScoreImpact": 7,
+          "affectedDimensions": [
+            "conceptValue",
+            "documentation",
+            "agentUsability",
+            "strategicFit",
+            "ossProductValue"
+          ],
+          "suggestedPrompt": "このリポジトリを todolist アプリとして位置づけ、README、package.json、LLM_CONTEXT の名称・説明・主要ワークフローを整合させてください。",
+          "acceptanceCriteria": [
+            "package name と description が todolist の価値を表す",
+            "README の冒頭が TODO アプリの目的と主要機能を説明している",
+            "LLM_CONTEXT が todolist 固有の変更入口を含む",
+            "template clone 後の未対応メモが完成品の説明と矛盾しない"
+          ]
+        },
+        {
+          "title": "todo API と UI 仕様を README に追加する",
+          "reason": "todo route/view/migration が存在するのに、公開 API と画面操作が文書化されていないため、利用者と agent が機能を把握しにくいです。",
+          "expectedScoreImpact": 5,
+          "affectedDimensions": [
+            "implementationCompleteness",
+            "documentation",
+            "agentUsability",
+            "ossProductValue"
+          ],
+          "suggestedPrompt": "README に todo 機能の API、認証要否、画面操作、データモデル概要を追加してください。",
+          "acceptanceCriteria": [
+            "todo endpoint の Method/Path/Description が API 表に載っている",
+            "作成・完了・削除など対応済み操作が説明されている",
+            "todo_items migration と仕様の対応が説明されている",
+            "未実装の操作がある場合は明記されている"
+          ]
+        },
+        {
+          "title": "verify 実行結果を評価可能な形で残す",
+          "reason": "スクリプトとテストファイルは揃っていますが、成功実績がないため信頼性と完成度の評価が推定に留まります。",
+          "expectedScoreImpact": 6,
+          "affectedDimensions": [
+            "testability",
+            "reliability",
+            "implementationCompleteness",
+            "ossProductValue"
+          ],
+          "suggestedPrompt": "bun run verify を実行し、失敗があれば修正して、README または docs に現在の検証ステータスを簡潔に記録してください。",
+          "acceptanceCriteria": [
+            "bun run verify が成功する",
+            "失敗した場合は原因と修正内容が記録されている",
+            "検証対象が typecheck、lint、format:check、test、build を含む",
+            "評価時点の未確認事項が残る場合は明記されている"
+          ]
+        },
+        {
+          "title": "todo ドメインの shared schema を明確化する",
+          "reason": "auth は shared schema 方針が明確ですが、todo の契約共有が見えないため、API と frontend の型安全性が機能単位で揃っているか判断しにくいです。",
+          "expectedScoreImpact": 4,
+          "affectedDimensions": [
+            "architectureQuality",
+            "maintainability",
+            "extensibility",
+            "testability"
+          ],
+          "suggestedPrompt": "todo の request/response schema を shared/schemas 配下に整理し、backend route と frontend client が同じ契約を参照するようにしてください。",
+          "acceptanceCriteria": [
+            "todo 用 schema が shared/schemas に存在する",
+            "backend route が schema validation を使う",
+            "frontend が手書きの重複型ではなく共有契約を参照する",
+            "todo route test が schema 境界を確認している"
+          ]
+        },
+        {
+          "title": "TODO アプリとしての最小ユーザーフローを定義する",
+          "reason": "実装部品はありますが、ユーザーが何を達成できるアプリかが文書上曖昧です。完成条件を定義すると改善優先度が決めやすくなります。",
+          "expectedScoreImpact": 5,
+          "affectedDimensions": [
+            "conceptValue",
+            "strategicFit",
+            "reliability",
+            "documentation"
+          ],
+          "suggestedPrompt": "todolist の最小ユーザーフローと完成条件を docs に定義し、現在の実装が満たしている項目と未対応項目を分けてください。",
+          "acceptanceCriteria": [
+            "ログイン前後の利用可否が明記されている",
+            "todo 作成、一覧、更新、削除の扱いが定義されている",
+            "空状態、エラー状態、ロード状態の期待動作が定義されている",
+            "未対応項目が TODO ではなく明確な backlog として整理されている"
+          ]
+        },
+        {
+          "title": "OSS 利用者向けの実行確認情報を補強する",
+          "reason": "セットアップ手順はありますが、初回起動後に何を見れば成功か、TODO 機能をどう試すかが不足しています。",
+          "expectedScoreImpact": 4,
+          "affectedDimensions": [
+            "documentation",
+            "ossProductValue",
+            "reliability",
+            "agentUsability"
+          ],
+          "suggestedPrompt": "README に初回起動後の確認手順、期待される画面、health check、todo 操作のスモークテストを追加してください。",
+          "acceptanceCriteria": [
+            "dev server 起動後の確認 URL が明記されている",
+            "health endpoint の期待レスポンスが説明されている",
+            "todo 操作の手動スモークテスト手順がある",
+            "よくある設定ミスと対処が簡潔に書かれている"
+          ]
+        }
+      ],
+      "notVerified": [
+        "追加コマンドは実行していないため、bun run verify、test、build の成否は未確認",
+        "EvaluationPromptContext に含まれないソース本文は確認していない",
+        "todo route/view の実際の挙動、認証要否、UI 品質は未確認",
+        "SQLite migration の実適用と runtime 起動は未確認",
+        "セキュリティ実装の詳細レビューや脆弱性検査は未実施"
+      ]
+    },
+    "delta": {
+      "previousEvaluationId": "de09bc07-5d20-4bc1-ac56-dae0f7e27ecc",
+      "scoreDelta": 2,
+      "confidenceDelta": 0.05,
+      "dimensionDeltas": [
+        {
+          "key": "conceptValue",
+          "previousScore": 88,
+          "currentScore": 78,
+          "delta": -10
+        },
+        {
+          "key": "implementationCompleteness",
+          "previousScore": 81,
+          "currentScore": 76,
+          "delta": -5
+        },
+        {
+          "key": "architectureQuality",
+          "previousScore": 76,
+          "currentScore": 79,
+          "delta": 3
+        },
+        {
+          "key": "maintainability",
+          "previousScore": 64,
+          "currentScore": 72,
+          "delta": 8
+        },
+        {
+          "key": "security",
+          "previousScore": 68,
+          "currentScore": 74,
+          "delta": 6
+        },
+        {
+          "key": "testability",
+          "previousScore": 73,
+          "currentScore": 80,
+          "delta": 7
+        },
+        {
+          "key": "documentation",
+          "previousScore": 66,
+          "currentScore": 71,
+          "delta": 5
+        },
+        {
+          "key": "agentUsability",
+          "previousScore": 69,
+          "currentScore": 84,
+          "delta": 15
+        },
+        {
+          "key": "extensibility",
+          "previousScore": 66,
+          "currentScore": 76,
+          "delta": 10
+        },
+        {
+          "key": "reliability",
+          "previousScore": 75,
+          "currentScore": 73,
+          "delta": -2
+        },
+        {
+          "key": "strategicFit",
+          "previousScore": 63,
+          "currentScore": 68,
+          "delta": 5
+        },
+        {
+          "key": "ossProductValue",
+          "previousScore": 71,
+          "currentScore": 70,
+          "delta": -1
+        }
+      ],
+      "newWeaknesses": [
+        "projectName は todolist だが README と package metadata は hono-standard template のままで整合していない",
+        "README の API セクションに todo endpoint がなく、todo 機能の仕様が見えにくい",
+        "実行結果、テスト結果、build 成功結果が提供コンテキスト内で未確認",
+        "TODO アプリとしての対象ユーザー、主要ワークフロー、完成条件が明文化されていない",
+        "frontend UI のテストや実際の画面品質に関する証拠が少ない",
+        "テンプレートとして残す範囲と todolist 固有に寄せる範囲が曖昧"
+      ],
+      "resolvedWeaknesses": [
+        "テスト実行結果が未確認",
+        "sample evaluation output が未確認"
+      ]
+    },
+    "createdAt": "2026-06-28T06:36:32.000Z"
+  },
+  "improvements": [
+    {
+      "id": "8ca457b6-0ccd-406c-bae5-2b54605cb954",
+      "evaluationId": "287a1347-4562-4ce3-bbbe-01050a097585",
+      "title": "プロジェクトの位置づけを todolist に統一する",
+      "reason": "README、package metadata、LLM_CONTEXT が template 名のままだと、評価・実装・OSS 利用のすべてで目的がぶれます。",
+      "sourceGapIds": [
+        "71531c9b-6da1-4823-a518-36231ec22758"
+      ],
+      "sourceDimensionKeys": [
+        "conceptValue",
+        "documentation",
+        "agentUsability",
+        "strategicFit",
+        "ossProductValue"
+      ],
+      "expectedScoreGain": 7,
+      "expectedConfidenceGain": 0.05,
+      "complexity": 2,
+      "priority": 1,
+      "taskType": "docs",
+      "prompt": "このリポジトリを todolist アプリとして位置づけ、README、package.json、LLM_CONTEXT の名称・説明・主要ワークフローを整合させてください。",
+      "acceptanceCriteria": [
+        "package name と description が todolist の価値を表す",
+        "README の冒頭が TODO アプリの目的と主要機能を説明している",
+        "LLM_CONTEXT が todolist 固有の変更入口を含む",
+        "template clone 後の未対応メモが完成品の説明と矛盾しない"
+      ],
+      "verificationCommands": [
+        "bun run typecheck",
+        "bun run test"
+      ],
+      "createdAt": "2026-06-28T06:36:32.000Z"
+    },
+    {
+      "id": "f83fa513-802d-4d73-940a-e5abb2cef442",
+      "evaluationId": "287a1347-4562-4ce3-bbbe-01050a097585",
+      "title": "todo API と UI 仕様を README に追加する",
+      "reason": "todo route/view/migration が存在するのに、公開 API と画面操作が文書化されていないため、利用者と agent が機能を把握しにくいです。",
+      "sourceGapIds": [
+        "fc236eb9-176c-4453-8fc9-8a4a40af8ba3"
+      ],
+      "sourceDimensionKeys": [
+        "implementationCompleteness",
+        "documentation",
+        "agentUsability",
+        "ossProductValue"
+      ],
+      "expectedScoreGain": 5,
+      "expectedConfidenceGain": 0.05,
+      "complexity": 2,
+      "priority": 2,
+      "taskType": "docs",
+      "prompt": "README に todo 機能の API、認証要否、画面操作、データモデル概要を追加してください。",
+      "acceptanceCriteria": [
+        "todo endpoint の Method/Path/Description が API 表に載っている",
+        "作成・完了・削除など対応済み操作が説明されている",
+        "todo_items migration と仕様の対応が説明されている",
+        "未実装の操作がある場合は明記されている"
+      ],
+      "verificationCommands": [
+        "bun run typecheck",
+        "bun run test"
+      ],
+      "createdAt": "2026-06-28T06:36:32.000Z"
+    },
+    {
+      "id": "39dcb017-af42-4b3b-be37-6cd834b62b0a",
+      "evaluationId": "287a1347-4562-4ce3-bbbe-01050a097585",
+      "title": "verify 実行結果を評価可能な形で残す",
+      "reason": "スクリプトとテストファイルは揃っていますが、成功実績がないため信頼性と完成度の評価が推定に留まります。",
+      "sourceGapIds": [
+        "829fd3e1-0544-40a1-880f-67d134c5a149"
+      ],
+      "sourceDimensionKeys": [
+        "testability",
+        "reliability",
+        "implementationCompleteness",
+        "ossProductValue"
+      ],
+      "expectedScoreGain": 6,
+      "expectedConfidenceGain": 0.05,
+      "complexity": 2,
+      "priority": 3,
+      "taskType": "feature",
+      "prompt": "bun run verify を実行し、失敗があれば修正して、README または docs に現在の検証ステータスを簡潔に記録してください。",
+      "acceptanceCriteria": [
+        "bun run verify が成功する",
+        "失敗した場合は原因と修正内容が記録されている",
+        "検証対象が typecheck、lint、format:check、test、build を含む",
+        "評価時点の未確認事項が残る場合は明記されている"
+      ],
+      "verificationCommands": [
+        "bun run typecheck",
+        "bun run test"
+      ],
+      "createdAt": "2026-06-28T06:36:32.000Z"
+    },
+    {
+      "id": "bae3c9dd-074b-49f5-a6e0-82258a471760",
+      "evaluationId": "287a1347-4562-4ce3-bbbe-01050a097585",
+      "title": "todo ドメインの shared schema を明確化する",
+      "reason": "auth は shared schema 方針が明確ですが、todo の契約共有が見えないため、API と frontend の型安全性が機能単位で揃っているか判断しにくいです。",
+      "sourceGapIds": [
+        "358a872f-5994-444b-bb3e-84b7a4212b6d"
+      ],
+      "sourceDimensionKeys": [
+        "architectureQuality",
+        "maintainability",
+        "extensibility",
+        "testability"
+      ],
+      "expectedScoreGain": 4,
+      "expectedConfidenceGain": 0.05,
+      "complexity": 2,
+      "priority": 4,
+      "taskType": "feature",
+      "prompt": "todo の request/response schema を shared/schemas 配下に整理し、backend route と frontend client が同じ契約を参照するようにしてください。",
+      "acceptanceCriteria": [
+        "todo 用 schema が shared/schemas に存在する",
+        "backend route が schema validation を使う",
+        "frontend が手書きの重複型ではなく共有契約を参照する",
+        "todo route test が schema 境界を確認している"
+      ],
+      "verificationCommands": [
+        "bun run typecheck",
+        "bun run test"
+      ],
+      "createdAt": "2026-06-28T06:36:32.000Z"
+    },
+    {
+      "id": "8341cc04-4c7a-4b16-979d-31a24b68fa9d",
+      "evaluationId": "287a1347-4562-4ce3-bbbe-01050a097585",
+      "title": "TODO アプリとしての最小ユーザーフローを定義する",
+      "reason": "実装部品はありますが、ユーザーが何を達成できるアプリかが文書上曖昧です。完成条件を定義すると改善優先度が決めやすくなります。",
+      "sourceGapIds": [
+        "95e07375-a383-417b-8606-5e0c733972e2"
+      ],
+      "sourceDimensionKeys": [
+        "conceptValue",
+        "strategicFit",
+        "reliability",
+        "documentation"
+      ],
+      "expectedScoreGain": 5,
+      "expectedConfidenceGain": 0.05,
+      "complexity": 2,
+      "priority": 5,
+      "taskType": "docs",
+      "prompt": "todolist の最小ユーザーフローと完成条件を docs に定義し、現在の実装が満たしている項目と未対応項目を分けてください。",
+      "acceptanceCriteria": [
+        "ログイン前後の利用可否が明記されている",
+        "todo 作成、一覧、更新、削除の扱いが定義されている",
+        "空状態、エラー状態、ロード状態の期待動作が定義されている",
+        "未対応項目が TODO ではなく明確な backlog として整理されている"
+      ],
+      "verificationCommands": [
+        "bun run typecheck",
+        "bun run test"
+      ],
+      "createdAt": "2026-06-28T06:36:32.000Z"
+    },
+    {
+      "id": "2a86bfa9-b23e-4463-b611-afaf62c2f289",
+      "evaluationId": "287a1347-4562-4ce3-bbbe-01050a097585",
+      "title": "OSS 利用者向けの実行確認情報を補強する",
+      "reason": "セットアップ手順はありますが、初回起動後に何を見れば成功か、TODO 機能をどう試すかが不足しています。",
+      "sourceGapIds": [
+        "2450fc1d-5a66-4dbb-8339-bda0bf37766c"
+      ],
+      "sourceDimensionKeys": [
+        "documentation",
+        "ossProductValue",
+        "reliability",
+        "agentUsability"
+      ],
+      "expectedScoreGain": 4,
+      "expectedConfidenceGain": 0.05,
+      "complexity": 2,
+      "priority": 6,
+      "taskType": "docs",
+      "prompt": "README に初回起動後の確認手順、期待される画面、health check、todo 操作のスモークテストを追加してください。",
+      "acceptanceCriteria": [
+        "dev server 起動後の確認 URL が明記されている",
+        "health endpoint の期待レスポンスが説明されている",
+        "todo 操作の手動スモークテスト手順がある",
+        "よくある設定ミスと対処が簡潔に書かれている"
+      ],
+      "verificationCommands": [
+        "bun run typecheck",
+        "bun run test"
+      ],
+      "createdAt": "2026-06-28T06:36:32.000Z"
+    }
+  ],
+  "activityEvents": [
+    {
+      "id": "5ac05260-52f7-4d85-96f0-35ef63ff0f3a",
+      "seq": 0,
+      "createdAt": "2026-06-28T06:33:58.530Z",
+      "phase": "project",
+      "level": "info",
+      "source": "evaluator",
+      "message": "Loading project profile."
+    },
+    {
+      "id": "71c28548-c9a2-4ab3-8b45-866f9b81cb6f",
+      "seq": 1,
+      "createdAt": "2026-06-28T06:33:58.530Z",
+      "phase": "history",
+      "level": "info",
+      "source": "evaluator",
+      "message": "Loading previous evaluation."
+    },
+    {
+      "id": "7b3b9362-eab3-4fef-9a7d-e90fabd811c7",
+      "seq": 2,
+      "createdAt": "2026-06-28T06:33:58.532Z",
+      "phase": "bundle",
+      "level": "info",
+      "source": "evaluator",
+      "message": "Building evaluation bundle and verification evidence."
+    },
+    {
+      "id": "070413fd-5034-48ae-83a0-08c4e9a07fdc",
+      "seq": 3,
+      "createdAt": "2026-06-28T06:33:58.539Z",
+      "phase": "bundle",
+      "level": "checkpoint",
+      "source": "evaluator",
+      "message": "Prompt context ready for baseline evaluation.",
+      "payload": {
+        "evidenceLevel": "repo-structure",
+        "baselinePrompt": "このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください",
+        "judgeSettings": {
+          "provider": "codex",
+          "model": "gpt-5.5",
+          "codexMode": "review-only",
+          "status": "ready"
+        }
+      }
+    },
+    {
+      "id": "bd7e59e9-df15-4bf0-b3d7-7d2e62ec223c",
+      "seq": 4,
+      "createdAt": "2026-06-28T06:33:58.539Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "evaluator",
+      "message": "Starting judge evaluation.",
+      "payload": {
+        "judge": {
+          "type": "codex-agent",
+          "model": "gpt-5.5",
+          "mode": "review-only"
+        }
+      }
+    },
+    {
+      "id": "bea1f74b-475a-4784-92ce-7b1d350adf8f",
+      "seq": 5,
+      "createdAt": "2026-06-28T06:34:00.479Z",
+      "phase": "judge",
+      "level": "checkpoint",
+      "source": "codex",
+      "payload": {
+        "providerEvent": {
+          "type": "thread.started",
+          "thread_id": "019f0cef-5269-7911-8759-95f4787ccd4e"
+        }
+      },
+      "message": "Codex thread started: 019f0cef-5269-7911-8759-95f4787ccd4e.",
+      "status": "started"
+    },
+    {
+      "id": "dee3329e-1515-4261-bca7-3c5752652b27",
+      "seq": 6,
+      "createdAt": "2026-06-28T06:34:00.542Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "providerEvent": {
+          "type": "turn.started"
+        }
+      },
+      "message": "Codex turn started.",
+      "status": "started"
+    },
+    {
+      "id": "2d41b3b6-ba87-44c6-95e3-5f789c7d77e5",
+      "seq": 7,
+      "createdAt": "2026-06-28T06:34:23.602Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "initial_instructions",
+        "arguments": {},
+        "result": null,
+        "status": "in_progress",
+        "providerEvent": {
+          "type": "item.started",
+          "item": {
+            "id": "item_0",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "initial_instructions",
+            "arguments": {},
+            "result": null,
+            "error": null,
+            "status": "in_progress"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.started: context-still.initial_instructions",
+      "status": "in_progress"
+    },
+    {
+      "id": "cd8b45a5-3d2f-40e4-9fb3-c6877f87118e",
+      "seq": 8,
+      "createdAt": "2026-06-28T06:34:23.646Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "initial_instructions",
+        "arguments": {},
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "## 常用ルール\n- 常に日本語で返答する。\n- まず `context_compile` を呼び、作業の主導線とする。`goal` を必ず渡し、適切な `changeTypes` / `technologies` を指定する。\n- `goal` は達成したい状態を1-3文で具体的に書き、設計書パスや `design.md` などの文書参照は含めない。\n- 次の応答がユーザーへの確認質問になりそうで、かつ自律的に続行できる余地がある場合は、質問する前に `context_decision` を pre-question gate として呼ぶ。\n- ブロッカー由来の判断が必要な場合、ユーザーに質問する前に `context_decision` を呼ぶ。例: このまま進めるか、修正して進めるか、reject/rollback/discard/escalate すべきか、PR作成前の判断、危険操作や未完了Todoの扱い。\n- `context_decision` が `reject` を返した場合は、その判断を停止条件として扱い、実装・変更・PR作成などの対象アクションを継続しない。必要な報告や確認待ちに切り替える。\n- `context_decision` に従った作業が完了し、結果が分かったら `context_decision_feedback` を保存する。成功/失敗/ユーザー上書き/回帰検出などの outcome は、完了直後または pre-commit 時点で分かる範囲で記録する。\n- ユーザーに情報を提示する際、それが本当に有用であるかを厳格に評価し、不確実な情報やノイズでコンテキストを圧迫しない。\n- 作業中に再利用可能なルールや手順（手続き）を確立した場合は、プロジェクト依存の記述を除いて汎用化し、`register_candidates` で登録する。\n- candidate 登録時は、単なる作業記録ではなく、他の文脈でも再利用できる知識として体裁を整える。\n- candidate 登録時の title / body / avoid / prefer の自然文は日本語で書く。識別子、API名、コマンド、URL、エラーメッセージは原文を保持してよい。\n- 手続き候補は SKILL.md 相当の形式が必須であり、`Use when:` / `Workflow:` / `Verification:` / `Avoid:` の見出しをこの順に含めないと登録できない。\n- 完了報告の前に、`context_compile` の実行回数と `compile_eval` の実行回数を自己申告する。また、各 runId ごとに `compile_eval` を1件以上保存する。ただし、`context_compile` が `No Content` を返した runId には保存しない。\n\n## MCPツール種別\n- `context_compile`: 作業前の最小コンテキスト生成（主導線）。\n- `context_decision`: ブロッカー由来の判断が必要な時に、ユーザーへ質問する前の実行/修正/拒否/巻き戻し等を判断。`reject` は停止条件として扱う。\n- `context_decision_feedback`: `context_decision` 後の作業結果を Good/Bad または system/AI outcome として保存。\n- `register_candidates`: 複数 candidate の一括登録。\n- `compile_eval`: `No Content` 以外の `context_compile` の作業後評価を保存。\n- `search_memory` / `fetch_memory`: 過去会話・差分の参照（補助）。\n- `doctor`: DB / embedding / automation / run health の診断。"
+            }
+          ],
+          "structured_content": null
+        },
+        "status": "completed",
+        "providerEvent": {
+          "type": "item.completed",
+          "item": {
+            "id": "item_0",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "initial_instructions",
+            "arguments": {},
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "## 常用ルール\n- 常に日本語で返答する。\n- まず `context_compile` を呼び、作業の主導線とする。`goal` を必ず渡し、適切な `changeTypes` / `technologies` を指定する。\n- `goal` は達成したい状態を1-3文で具体的に書き、設計書パスや `design.md` などの文書参照は含めない。\n- 次の応答がユーザーへの確認質問になりそうで、かつ自律的に続行できる余地がある場合は、質問する前に `context_decision` を pre-question gate として呼ぶ。\n- ブロッカー由来の判断が必要な場合、ユーザーに質問する前に `context_decision` を呼ぶ。例: このまま進めるか、修正して進めるか、reject/rollback/discard/escalate すべきか、PR作成前の判断、危険操作や未完了Todoの扱い。\n- `context_decision` が `reject` を返した場合は、その判断を停止条件として扱い、実装・変更・PR作成などの対象アクションを継続しない。必要な報告や確認待ちに切り替える。\n- `context_decision` に従った作業が完了し、結果が分かったら `context_decision_feedback` を保存する。成功/失敗/ユーザー上書き/回帰検出などの outcome は、完了直後または pre-commit 時点で分かる範囲で記録する。\n- ユーザーに情報を提示する際、それが本当に有用であるかを厳格に評価し、不確実な情報やノイズでコンテキストを圧迫しない。\n- 作業中に再利用可能なルールや手順（手続き）を確立した場合は、プロジェクト依存の記述を除いて汎用化し、`register_candidates` で登録する。\n- candidate 登録時は、単なる作業記録ではなく、他の文脈でも再利用できる知識として体裁を整える。\n- candidate 登録時の title / body / avoid / prefer の自然文は日本語で書く。識別子、API名、コマンド、URL、エラーメッセージは原文を保持してよい。\n- 手続き候補は SKILL.md 相当の形式が必須であり、`Use when:` / `Workflow:` / `Verification:` / `Avoid:` の見出しをこの順に含めないと登録できない。\n- 完了報告の前に、`context_compile` の実行回数と `compile_eval` の実行回数を自己申告する。また、各 runId ごとに `compile_eval` を1件以上保存する。ただし、`context_compile` が `No Content` を返した runId には保存しない。\n\n## MCPツール種別\n- `context_compile`: 作業前の最小コンテキスト生成（主導線）。\n- `context_decision`: ブロッカー由来の判断が必要な時に、ユーザーへ質問する前の実行/修正/拒否/巻き戻し等を判断。`reject` は停止条件として扱う。\n- `context_decision_feedback`: `context_decision` 後の作業結果を Good/Bad または system/AI outcome として保存。\n- `register_candidates`: 複数 candidate の一括登録。\n- `compile_eval`: `No Content` 以外の `context_compile` の作業後評価を保存。\n- `search_memory` / `fetch_memory`: 過去会話・差分の参照（補助）。\n- `doctor`: DB / embedding / automation / run health の診断。"
+                }
+              ],
+              "structured_content": null
+            },
+            "error": null,
+            "status": "completed"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.completed: context-still.initial_instructions",
+      "status": "completed"
+    },
+    {
+      "id": "391a2878-c8b0-4654-aa75-f71a8c419a33",
+      "seq": 9,
+      "createdAt": "2026-06-28T06:34:43.876Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "context_compile",
+        "arguments": {
+          "goal": "todolist プロジェクトの提供済み EvaluationPromptContext をもとに、ファイル変更なしでプロジェクト価値を多角的に評価し、指定スキーマの JSON だけを返す。",
+          "changeTypes": [
+            "review",
+            "evaluation"
+          ],
+          "technologies": [
+            "Bun",
+            "Hono",
+            "React",
+            "Vite",
+            "SQLite",
+            "TypeScript"
+          ]
+        },
+        "result": null,
+        "status": "in_progress",
+        "providerEvent": {
+          "type": "item.started",
+          "item": {
+            "id": "item_1",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "context_compile",
+            "arguments": {
+              "goal": "todolist プロジェクトの提供済み EvaluationPromptContext をもとに、ファイル変更なしでプロジェクト価値を多角的に評価し、指定スキーマの JSON だけを返す。",
+              "changeTypes": [
+                "review",
+                "evaluation"
+              ],
+              "technologies": [
+                "Bun",
+                "Hono",
+                "React",
+                "Vite",
+                "SQLite",
+                "TypeScript"
+              ]
+            },
+            "result": null,
+            "error": null,
+            "status": "in_progress"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.started: context-still.context_compile",
+      "status": "in_progress"
+    },
+    {
+      "id": "0de10267-ff32-44e1-b590-11babb36598d",
+      "seq": 10,
+      "createdAt": "2026-06-28T06:34:54.939Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "context_compile",
+        "arguments": {
+          "goal": "todolist プロジェクトの提供済み EvaluationPromptContext をもとに、ファイル変更なしでプロジェクト価値を多角的に評価し、指定スキーマの JSON だけを返す。",
+          "changeTypes": [
+            "review",
+            "evaluation"
+          ],
+          "technologies": [
+            "Bun",
+            "Hono",
+            "React",
+            "Vite",
+            "SQLite",
+            "TypeScript"
+          ]
+        },
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "## Use when\n- todolist プロジェクトの提供済み EvaluationPromptContext を使い、**ファイル変更なし**で価値を多角的に評価するとき。\n- 評価対象が広がりやすいので、**非目標と禁止事項を先に固定**してから進めるとき。\n- 評価結果を、後続の実装や修正ではなく、**現状把握と比較可能な評価**としてまとめるとき。\n\n## Workflow\n1. **評価の前提を固定する**\n   - 対象は提供済みの EvaluationPromptContext に限定する。\n   - ファイル変更、追加実装、リファクタリング、コミットは行わない。\n   - 何を評価するかを、価値・品質・検証可能性の観点に絞る。\n\n2. **評価の焦点を整理する**\n   - プロジェクト価値を多角的に見るため、少なくとも次の観点で読む。\n     - 目的への適合\n     - 実行可能性\n     - 検証しやすさ\n     - 変更の最小性\n     - 既存の流れとの整合\n   - 追加の論点を広げすぎず、評価に直接関係するものだけを採用する。\n\n3. **ベースラインを確認する**\n   - 変更前の状態や、現状の説明・制約・期待結果を確認する。\n   - 変更効果や回帰有無を論じる場合は、比較対象が明確かを先に見る。\n   - 検証が必要な評価では、検証手順が本体に含まれているかを確認する。\n\n4. **評価を構造化する**\n   - 各観点について、良い点・不足点・確認が必要な点を分けて整理する。\n   - 変更を伴う提案に寄せず、現状の評価として記述する。\n   - もし曖昧さがあるなら、断定せず確認事項として残す。\n\n5. **検証可能性を点検する**\n   - 評価が主観だけで終わっていないかを見る。\n   - 成功条件、期待結果、失敗時の扱いが明示されているかを確認する。\n   - downstream の結果確認が必要な場合は、未確認のまま完了扱いにしない。\n\n6. **出力を JSON のみで整える**\n   - 指定スキーマに合わせて、Markdown 本文と参照した knowledge / episode を整理する。\n   - 余計な説明やスキーマ外の文字列は出さない。\n\n## Verification\n- 評価対象が EvaluationPromptContext に限定され、ファイル変更を前提にしていない。\n- 非目標と禁止事項が明記され、ついで対応や過剰拡張を抑えている。\n- 評価の焦点が多角的で、目的適合・実行可能性・検証可能性などに分かれている。\n- ベースラインや比較条件が必要な場合、それが確認されている。\n- 検証手順が評価の付録ではなく、完了判断に使える形で含まれている。\n- 未確認の mutation や結果を完了扱いにしていない。\n\n## Avoid\n- ファイル変更、追加実装、リファクタリング、コミットを行うこと。\n- 評価対象を EvaluationPromptContext 以外に広げること。\n- 目的に直接関係しない改善案や過剰な拡張を混ぜること。\n- 検証を後回しにして、主観的な印象だけで結論づけること。\n- 未確認の結果を確定済みとして扱うこと。"
+            }
+          ],
+          "structured_content": null
+        },
+        "status": "completed",
+        "providerEvent": {
+          "type": "item.completed",
+          "item": {
+            "id": "item_1",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "context_compile",
+            "arguments": {
+              "goal": "todolist プロジェクトの提供済み EvaluationPromptContext をもとに、ファイル変更なしでプロジェクト価値を多角的に評価し、指定スキーマの JSON だけを返す。",
+              "changeTypes": [
+                "review",
+                "evaluation"
+              ],
+              "technologies": [
+                "Bun",
+                "Hono",
+                "React",
+                "Vite",
+                "SQLite",
+                "TypeScript"
+              ]
+            },
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "## Use when\n- todolist プロジェクトの提供済み EvaluationPromptContext を使い、**ファイル変更なし**で価値を多角的に評価するとき。\n- 評価対象が広がりやすいので、**非目標と禁止事項を先に固定**してから進めるとき。\n- 評価結果を、後続の実装や修正ではなく、**現状把握と比較可能な評価**としてまとめるとき。\n\n## Workflow\n1. **評価の前提を固定する**\n   - 対象は提供済みの EvaluationPromptContext に限定する。\n   - ファイル変更、追加実装、リファクタリング、コミットは行わない。\n   - 何を評価するかを、価値・品質・検証可能性の観点に絞る。\n\n2. **評価の焦点を整理する**\n   - プロジェクト価値を多角的に見るため、少なくとも次の観点で読む。\n     - 目的への適合\n     - 実行可能性\n     - 検証しやすさ\n     - 変更の最小性\n     - 既存の流れとの整合\n   - 追加の論点を広げすぎず、評価に直接関係するものだけを採用する。\n\n3. **ベースラインを確認する**\n   - 変更前の状態や、現状の説明・制約・期待結果を確認する。\n   - 変更効果や回帰有無を論じる場合は、比較対象が明確かを先に見る。\n   - 検証が必要な評価では、検証手順が本体に含まれているかを確認する。\n\n4. **評価を構造化する**\n   - 各観点について、良い点・不足点・確認が必要な点を分けて整理する。\n   - 変更を伴う提案に寄せず、現状の評価として記述する。\n   - もし曖昧さがあるなら、断定せず確認事項として残す。\n\n5. **検証可能性を点検する**\n   - 評価が主観だけで終わっていないかを見る。\n   - 成功条件、期待結果、失敗時の扱いが明示されているかを確認する。\n   - downstream の結果確認が必要な場合は、未確認のまま完了扱いにしない。\n\n6. **出力を JSON のみで整える**\n   - 指定スキーマに合わせて、Markdown 本文と参照した knowledge / episode を整理する。\n   - 余計な説明やスキーマ外の文字列は出さない。\n\n## Verification\n- 評価対象が EvaluationPromptContext に限定され、ファイル変更を前提にしていない。\n- 非目標と禁止事項が明記され、ついで対応や過剰拡張を抑えている。\n- 評価の焦点が多角的で、目的適合・実行可能性・検証可能性などに分かれている。\n- ベースラインや比較条件が必要な場合、それが確認されている。\n- 検証手順が評価の付録ではなく、完了判断に使える形で含まれている。\n- 未確認の mutation や結果を完了扱いにしていない。\n\n## Avoid\n- ファイル変更、追加実装、リファクタリング、コミットを行うこと。\n- 評価対象を EvaluationPromptContext 以外に広げること。\n- 目的に直接関係しない改善案や過剰な拡張を混ぜること。\n- 検証を後回しにして、主観的な印象だけで結論づけること。\n- 未確認の結果を確定済みとして扱うこと。"
+                }
+              ],
+              "structured_content": null
+            },
+            "error": null,
+            "status": "completed"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.completed: context-still.context_compile",
+      "status": "completed"
+    },
+    {
+      "id": "472fbec9-ecdd-462e-a6aa-26e1179370d6",
+      "seq": 11,
+      "createdAt": "2026-06-28T06:35:14.663Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "compile_eval",
+        "arguments": {
+          "outcome": "useful",
+          "title": "評価専用コンテキスト",
+          "body": "提供された EvaluationPromptContext に限定し、ファイル変更なし・JSONのみ出力という制約を確認できた。今回の評価方針に直接使った。",
+          "relevance": 92,
+          "coverage": 86,
+          "specificity": 84,
+          "actionability": 88,
+          "clarity": 90
+        },
+        "result": null,
+        "status": "in_progress",
+        "providerEvent": {
+          "type": "item.started",
+          "item": {
+            "id": "item_2",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "compile_eval",
+            "arguments": {
+              "outcome": "useful",
+              "title": "評価専用コンテキスト",
+              "body": "提供された EvaluationPromptContext に限定し、ファイル変更なし・JSONのみ出力という制約を確認できた。今回の評価方針に直接使った。",
+              "relevance": 92,
+              "coverage": 86,
+              "specificity": 84,
+              "actionability": 88,
+              "clarity": 90
+            },
+            "result": null,
+            "error": null,
+            "status": "in_progress"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.started: context-still.compile_eval",
+      "status": "in_progress"
+    },
+    {
+      "id": "09d7b500-56c4-4afe-96a9-56b34c4d76e3",
+      "seq": 12,
+      "createdAt": "2026-06-28T06:35:14.694Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "compile_eval",
+        "arguments": {
+          "outcome": "useful",
+          "title": "評価専用コンテキスト",
+          "body": "提供された EvaluationPromptContext に限定し、ファイル変更なし・JSONのみ出力という制約を確認できた。今回の評価方針に直接使った。",
+          "relevance": 92,
+          "coverage": 86,
+          "specificity": 84,
+          "actionability": 88,
+          "clarity": 90
+        },
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n  \"evaluation\": {\n    \"actionability\": 88,\n    \"avg\": 88,\n    \"body\": \"提供された EvaluationPromptContext に限定し、ファイル変更なし・JSONのみ出力という制約を確認できた。今回の評価方針に直接使った。\",\n    \"clarity\": 90,\n    \"coverage\": 86,\n    \"createdAt\": \"unix-ms:1782628514690\",\n    \"id\": \"00000000-0000-0000-18bd-2b30789dece7\",\n    \"outcome\": \"useful\",\n    \"relevance\": 92,\n    \"runId\": \"00000000-0000-0000-18bd-2b2952600fdb\",\n    \"sessionId\": \"019f0cef-5269-7911-8759-95f4787ccd4e\",\n    \"source\": \"mcp\",\n    \"specificity\": 84,\n    \"title\": \"評価専用コンテキスト\",\n    \"updatedAt\": \"unix-ms:1782628514690\"\n  },\n  \"resolvedFrom\": \"latest_session_run\"\n}"
+            }
+          ],
+          "structured_content": null
+        },
+        "status": "completed",
+        "providerEvent": {
+          "type": "item.completed",
+          "item": {
+            "id": "item_2",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "compile_eval",
+            "arguments": {
+              "outcome": "useful",
+              "title": "評価専用コンテキスト",
+              "body": "提供された EvaluationPromptContext に限定し、ファイル変更なし・JSONのみ出力という制約を確認できた。今回の評価方針に直接使った。",
+              "relevance": 92,
+              "coverage": 86,
+              "specificity": 84,
+              "actionability": 88,
+              "clarity": 90
+            },
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "{\n  \"evaluation\": {\n    \"actionability\": 88,\n    \"avg\": 88,\n    \"body\": \"提供された EvaluationPromptContext に限定し、ファイル変更なし・JSONのみ出力という制約を確認できた。今回の評価方針に直接使った。\",\n    \"clarity\": 90,\n    \"coverage\": 86,\n    \"createdAt\": \"unix-ms:1782628514690\",\n    \"id\": \"00000000-0000-0000-18bd-2b30789dece7\",\n    \"outcome\": \"useful\",\n    \"relevance\": 92,\n    \"runId\": \"00000000-0000-0000-18bd-2b2952600fdb\",\n    \"sessionId\": \"019f0cef-5269-7911-8759-95f4787ccd4e\",\n    \"source\": \"mcp\",\n    \"specificity\": 84,\n    \"title\": \"評価専用コンテキスト\",\n    \"updatedAt\": \"unix-ms:1782628514690\"\n  },\n  \"resolvedFrom\": \"latest_session_run\"\n}"
+                }
+              ],
+              "structured_content": null
+            },
+            "error": null,
+            "status": "completed"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.completed: context-still.compile_eval",
+      "status": "completed"
+    },
+    {
+      "id": "eca8cf9f-6687-4f57-bdfd-b1f925c9faa4",
+      "seq": 13,
+      "createdAt": "2026-06-28T06:36:32.183Z",
+      "phase": "judge",
+      "level": "checkpoint",
+      "source": "codex",
+      "payload": {
+        "itemType": "agent_message",
+        "text": "{\"schemaVersion\":\"project-evaluation-report/v1\",\"baselinePrompt\":\"このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください\",\"judge\":{\"provider\":\"codex\",\"model\":\"gpt-5.5\",\"mode\":\"review-only\"},\"overallScore\":74,\"confidence\":0.69,\"summary\":\"Bun + Hono + React + SQLite の実用的なフルスタック雛形としては価値が高く、認証、共有スキーマ、検証スクリプト、LLM_CONTEXT まで揃っているため coding agents が次の改善に入りやすい構成です。一方で、評価対象名は todolist なのに README と package metadata は hono-standard template のままで、todo 機能の価値・操作・API が文書上ほぼ前面化されていません。実装は一定以上に揃っているように見えますが、今回は提供コンテキストのみのレビューであり、テストや実行結果は未確認です。\",\"dimensions\":[{\"key\":\"conceptValue\",\"label\":\"conceptValue\",\"score\":78,\"confidence\":0.72,\"rationale\":\"Hono backend と React frontend を同一 origin で扱うテンプレートとして明確な価値があります。認証、SQLite、showcase、todo route/view を含むため、アプリ開発の土台として使いやすいです。ただし projectName が todolist であるのに、README 上の主価値は汎用テンプレートであり、TODO アプリとしての独自価値は弱く見えます。\",\"evidence\":[\"README は local SQLite 対応の Web app template と説明している\",\"package description は optional login and showcase screens を中心にしている\",\"repoTree に api/routes/todo.route.ts と web/src/views/todo-list-view.tsx が存在する\"],\"concerns\":[\"TODO プロダクトとしての対象ユーザー、主要ワークフロー、差別化が明文化されていない\",\"テンプレート価値と todolist 価値が混在している\"]},{\"key\":\"implementationCompleteness\",\"label\":\"implementationCompleteness\",\"score\":76,\"confidence\":0.66,\"rationale\":\"API、DB migration、auth、frontend routes、tests、verify pipeline が揃っており、実装の面積は十分あります。todo route/view/test/migration も存在します。ただし README の API セクションには todo API がなく、提供情報だけでは todo 機能の完成度や UI 動線を確認できません。\",\"evidence\":[\"api/routes/auth.route.ts、health.route.ts、todo.route.ts が存在する\",\"drizzle/0002_todo_items.sql が存在する\",\"web/src/routes/todo-list-route.tsx と todo-list-view.tsx が存在する\",\"Vitest test files が auth、middleware、routes に複数存在する\"],\"concerns\":[\"todo 機能の仕様、永続化、認可範囲が文書から読み取れない\",\"実行・テスト結果が提供されていない\"]},{\"key\":\"architectureQuality\",\"label\":\"architectureQuality\",\"score\":79,\"confidence\":0.7,\"rationale\":\"Hono app composition、route、module、middleware、shared schemas、frontend views が分離されており、標準的で追いやすい構造です。frontend/backend の API 型共有も良い設計です。一方で、TODO ドメインの shared schema が repoTree 上で見えず、auth 以外の契約共有がどこまで徹底されているかは不明です。\",\"evidence\":[\"api/app/hono.ts が AppType を export し、frontend が hono/client で参照する方針\",\"api/modules/auth、api/middleware、api/routes の分離\",\"shared/schemas/auth.schema.ts が存在する\"],\"concerns\":[\"todo の共有 schema が repoTree に見えない\",\"template とアプリ固有機能の境界がまだ整理途上に見える\"]},{\"key\":\"maintainability\",\"label\":\"maintainability\",\"score\":72,\"confidence\":0.68,\"rationale\":\"ディレクトリ構成、README、LLM_CONTEXT、verify script により保守の入口は整っています。Biome、TypeScript、Vitest もあり、変更時の基本的な品質維持が期待できます。ただし README/package metadata と実際の todolist 要素にズレがあり、将来の agent や開発者が目的を誤認しやすい状態です。\",\"evidence\":[\"scripts/verify.ts が typecheck、lint、format、test、build を束ねる\",\"LLM_CONTEXT に task routing と implementation contracts がある\",\"README に主要パスと scripts が整理されている\"],\"concerns\":[\"プロジェクト名・README・package description の整合性が不足\",\"README の API 一覧が todo 実装を反映していない可能性がある\"]},{\"key\":\"security\",\"label\":\"security\",\"score\":74,\"confidence\":0.62,\"rationale\":\"httpOnly cookie、access/refresh token、JWT_SECRET の production fail closed、SameSite/Secure 条件など、テンプレートとして重要なセキュリティ配慮があります。auth 関連のテストも多く見えます。ただし実装詳細やテスト結果は未確認で、todo route に認可が適用されているかも提供情報だけでは判断できません。\",\"evidence\":[\"README に httpOnly Cookie による access / refresh token と記載\",\"JWT_SECRET は production で未設定または dev default なら起動失敗と記載\",\"AUTH_COOKIE_SAME_SITE=none では HTTPS または Secure が必要と記載\",\"auth-cookies、token.service、auth middleware の test files が存在する\"],\"concerns\":[\"todo API の認証・認可境界が未確認\",\"CSRF 対策や refresh token rotation の実装挙動は未検証\"]},{\"key\":\"testability\",\"label\":\"testability\",\"score\":80,\"confidence\":0.7,\"rationale\":\"Vitest、typecheck、Biome、build をまとめた verify pipeline があり、backend/auth/route のテストファイルも多いためテスト可能性は高いです。todo route test も存在します。ただし今回のコンテキストには実行結果がなく、frontend UI のテスト有無も限定的に見えます。\",\"evidence\":[\"package scripts に test、typecheck、lint、format:check、build、verify がある\",\"api/app、middleware、auth modules、routes に test files がある\",\"api/routes/todo.route.test.ts が存在する\"],\"concerns\":[\"テスト成功結果が未提供\",\"frontend の interaction や visual regression の検証は見えない\"]},{\"key\":\"documentation\",\"label\":\"documentation\",\"score\":71,\"confidence\":0.73,\"rationale\":\"README と LLM_CONTEXT は充実しており、setup、env、scripts、API、task routing、contracts がまとまっています。coding agent にとって入口は良いです。ただし todolist としての利用説明、todo API、画面操作、プロジェクト名の反映が不足しており、ドキュメントがテンプレート状態に寄っています。\",\"evidence\":[\"README に構成、セットアップ、環境変数、scripts、API がある\",\"LLM_CONTEXT に Repository Snapshot、Task Routing、Verification Matrix がある\",\"docs/template-variant-management.md が存在する\"],\"concerns\":[\"README が Hono Standard のままで todolist の説明が弱い\",\"README API 表に todo endpoint がない\"]},{\"key\":\"agentUsability\",\"label\":\"agentUsability\",\"score\":84,\"confidence\":0.76,\"rationale\":\"LLM_CONTEXT が非常に agent 向けで、変更種別ごとの読むべきファイル、避けるべき復活要素、検証コマンドが整理されています。README も構造化されており、coding agents が安全に作業開始しやすいです。弱点は、プロジェクト名と実態のズレにより、agent がテンプレート改善と TODO アプリ改善を混同しやすい点です。\",\"evidence\":[\"LLM_CONTEXT に Task Routing と Implementation Contracts がある\",\"Clone Adaptation Checklist がある\",\"Verification Matrix が変更種別ごとに分かれている\"],\"concerns\":[\"todolist 固有の agent guidance が不足\",\"README と package metadata の未更新が判断ノイズになる\"]},{\"key\":\"extensibility\",\"label\":\"extensibility\",\"score\":76,\"confidence\":0.68,\"rationale\":\"route/module/schema/view の分離、Drizzle migrations、shared schemas、React Router により機能追加しやすい土台です。todo 機能も追加 migration と route/view で拡張されているように見えます。ただし todo schema やドメイン構造が README/LLM_CONTEXT に反映されていないため、拡張方針の明瞭さは少し落ちます。\",\"evidence\":[\"api/routes、api/modules、shared/schemas、web/src/views の分離\",\"drizzle migration が auth と todo_items に分かれている\",\"React Router の route files が機能別に存在する\"],\"concerns\":[\"todo ドメインの拡張契約が文書化されていない\",\"テンプレート利用先の rename/adaptation が未完了に見える\"]},{\"key\":\"reliability\",\"label\":\"reliability\",\"score\":73,\"confidence\":0.63,\"rationale\":\"health route、migration script、verify pipeline、auth token rotation 方針など、信頼性を支える部品はあります。production JWT_SECRET の fail closed も良いです。ただし今回は起動確認、migration 適用、test 実行、build 成功が未確認であり、実運用時の信頼性は推定に留まります。\",\"evidence\":[\"GET /api/health がある\",\"bun run db:migrate と verify script がある\",\"production では弱い JWT_SECRET で起動失敗する設計が README に記載\"],\"concerns\":[\"runtime 動作は未確認\",\"SQLite migration の実適用結果は未確認\"]},{\"key\":\"strategicFit\",\"label\":\"strategicFit\",\"score\":68,\"confidence\":0.71,\"rationale\":\"primaryAudience が coding agents であるなら、LLM_CONTEXT と構造化 README により戦略適合は高めです。しかし projectName は todolist で、package name/README は hono-standard template のままなので、評価対象としての戦略が曖昧です。TODO アプリとして伸ばすのか、標準テンプレートとして維持するのかを決める必要があります。\",\"evidence\":[\"primaryAudience は coding agents\",\"targetWorkflow は evaluate project value and generate next improvements\",\"package name は hono-standard\",\"README title は Hono Standard\"],\"concerns\":[\"todolist と hono-standard の位置づけが矛盾している\",\"プロジェクトの成功条件がテンプレート基準かアプリ基準か不明\"]},{\"key\":\"ossProductValue\",\"label\":\"ossProductValue\",\"score\":70,\"confidence\":0.66,\"rationale\":\"MIT license、README、setup、scripts、env 説明があり、OSS テンプレートとして公開価値があります。依存関係も現代的で、Bun/Hono/React の標準例として有用です。一方で、todolist として公開するなら README、metadata、機能説明、スクリーンショット、利用シナリオが不足しています。\",\"evidence\":[\"license は MIT\",\"README に setup と production runtime の説明がある\",\"package files に dist-web、README、LICENSE、package.json が含まれる\"],\"concerns\":[\"OSS 利用者向けの todo 機能説明が不足\",\"テンプレートの clone 後チェックリストが残っており完成品感を下げる\"]}],\"strengths\":[\"Bun + Hono + React + SQLite の標準的なフルスタック構成がまとまっている\",\"認証、cookie、JWT、refresh token、production secret guard など基礎的な security 設計がある\",\"shared schema と AppType による frontend/backend 契約共有方針が明確\",\"Vitest、Biome、TypeScript、build を束ねた verify pipeline がある\",\"LLM_CONTEXT が agent の読む順序、変更境界、検証方針を具体的に支援している\",\"todo route/view/migration/test が存在し、テンプレートから実アプリ化する足場がある\"],\"weaknesses\":[\"projectName は todolist だが README と package metadata は hono-standard template のままで整合していない\",\"README の API セクションに todo endpoint がなく、todo 機能の仕様が見えにくい\",\"実行結果、テスト結果、build 成功結果が提供コンテキスト内で未確認\",\"TODO アプリとしての対象ユーザー、主要ワークフロー、完成条件が明文化されていない\",\"frontend UI のテストや実際の画面品質に関する証拠が少ない\",\"テンプレートとして残す範囲と todolist 固有に寄せる範囲が曖昧\"],\"improvementIdeas\":[{\"title\":\"プロジェクトの位置づけを todolist に統一する\",\"reason\":\"README、package metadata、LLM_CONTEXT が template 名のままだと、評価・実装・OSS 利用のすべてで目的がぶれます。\",\"expectedScoreImpact\":7,\"affectedDimensions\":[\"conceptValue\",\"documentation\",\"agentUsability\",\"strategicFit\",\"ossProductValue\"],\"suggestedPrompt\":\"このリポジトリを todolist アプリとして位置づけ、README、package.json、LLM_CONTEXT の名称・説明・主要ワークフローを整合させてください。\",\"acceptanceCriteria\":[\"package name と description が todolist の価値を表す\",\"README の冒頭が TODO アプリの目的と主要機能を説明している\",\"LLM_CONTEXT が todolist 固有の変更入口を含む\",\"template clone 後の未対応メモが完成品の説明と矛盾しない\"]},{\"title\":\"todo API と UI 仕様を README に追加する\",\"reason\":\"todo route/view/migration が存在するのに、公開 API と画面操作が文書化されていないため、利用者と agent が機能を把握しにくいです。\",\"expectedScoreImpact\":5,\"affectedDimensions\":[\"implementationCompleteness\",\"documentation\",\"agentUsability\",\"ossProductValue\"],\"suggestedPrompt\":\"README に todo 機能の API、認証要否、画面操作、データモデル概要を追加してください。\",\"acceptanceCriteria\":[\"todo endpoint の Method/Path/Description が API 表に載っている\",\"作成・完了・削除など対応済み操作が説明されている\",\"todo_items migration と仕様の対応が説明されている\",\"未実装の操作がある場合は明記されている\"]},{\"title\":\"verify 実行結果を評価可能な形で残す\",\"reason\":\"スクリプトとテストファイルは揃っていますが、成功実績がないため信頼性と完成度の評価が推定に留まります。\",\"expectedScoreImpact\":6,\"affectedDimensions\":[\"testability\",\"reliability\",\"implementationCompleteness\",\"ossProductValue\"],\"suggestedPrompt\":\"bun run verify を実行し、失敗があれば修正して、README または docs に現在の検証ステータスを簡潔に記録してください。\",\"acceptanceCriteria\":[\"bun run verify が成功する\",\"失敗した場合は原因と修正内容が記録されている\",\"検証対象が typecheck、lint、format:check、test、build を含む\",\"評価時点の未確認事項が残る場合は明記されている\"]},{\"title\":\"todo ドメインの shared schema を明確化する\",\"reason\":\"auth は shared schema 方針が明確ですが、todo の契約共有が見えないため、API と frontend の型安全性が機能単位で揃っているか判断しにくいです。\",\"expectedScoreImpact\":4,\"affectedDimensions\":[\"architectureQuality\",\"maintainability\",\"extensibility\",\"testability\"],\"suggestedPrompt\":\"todo の request/response schema を shared/schemas 配下に整理し、backend route と frontend client が同じ契約を参照するようにしてください。\",\"acceptanceCriteria\":[\"todo 用 schema が shared/schemas に存在する\",\"backend route が schema validation を使う\",\"frontend が手書きの重複型ではなく共有契約を参照する\",\"todo route test が schema 境界を確認している\"]},{\"title\":\"TODO アプリとしての最小ユーザーフローを定義する\",\"reason\":\"実装部品はありますが、ユーザーが何を達成できるアプリかが文書上曖昧です。完成条件を定義すると改善優先度が決めやすくなります。\",\"expectedScoreImpact\":5,\"affectedDimensions\":[\"conceptValue\",\"strategicFit\",\"reliability\",\"documentation\"],\"suggestedPrompt\":\"todolist の最小ユーザーフローと完成条件を docs に定義し、現在の実装が満たしている項目と未対応項目を分けてください。\",\"acceptanceCriteria\":[\"ログイン前後の利用可否が明記されている\",\"todo 作成、一覧、更新、削除の扱いが定義されている\",\"空状態、エラー状態、ロード状態の期待動作が定義されている\",\"未対応項目が TODO ではなく明確な backlog として整理されている\"]},{\"title\":\"OSS 利用者向けの実行確認情報を補強する\",\"reason\":\"セットアップ手順はありますが、初回起動後に何を見れば成功か、TODO 機能をどう試すかが不足しています。\",\"expectedScoreImpact\":4,\"affectedDimensions\":[\"documentation\",\"ossProductValue\",\"reliability\",\"agentUsability\"],\"suggestedPrompt\":\"README に初回起動後の確認手順、期待される画面、health check、todo 操作のスモークテストを追加してください。\",\"acceptanceCriteria\":[\"dev server 起動後の確認 URL が明記されている\",\"health endpoint の期待レスポンスが説明されている\",\"todo 操作の手動スモークテスト手順がある\",\"よくある設定ミスと対処が簡潔に書かれている\"]}],\"notVerified\":[\"追加コマンドは実行していないため、bun run verify、test、build の成否は未確認\",\"EvaluationPromptContext に含まれないソース本文は確認していない\",\"todo route/view の実際の挙動、認証要否、UI 品質は未確認\",\"SQLite migration の実適用と runtime 起動は未確認\",\"セキュリティ実装の詳細レビューや脆弱性検査は未実施\"]}",
+        "providerEvent": {
+          "type": "item.completed",
+          "item": {
+            "id": "item_3",
+            "type": "agent_message",
+            "text": "{\"schemaVersion\":\"project-evaluation-report/v1\",\"baselinePrompt\":\"このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください\",\"judge\":{\"provider\":\"codex\",\"model\":\"gpt-5.5\",\"mode\":\"review-only\"},\"overallScore\":74,\"confidence\":0.69,\"summary\":\"Bun + Hono + React + SQLite の実用的なフルスタック雛形としては価値が高く、認証、共有スキーマ、検証スクリプト、LLM_CONTEXT まで揃っているため coding agents が次の改善に入りやすい構成です。一方で、評価対象名は todolist なのに README と package metadata は hono-standard template のままで、todo 機能の価値・操作・API が文書上ほぼ前面化されていません。実装は一定以上に揃っているように見えますが、今回は提供コンテキストのみのレビューであり、テストや実行結果は未確認です。\",\"dimensions\":[{\"key\":\"conceptValue\",\"label\":\"conceptValue\",\"score\":78,\"confidence\":0.72,\"rationale\":\"Hono backend と React frontend を同一 origin で扱うテンプレートとして明確な価値があります。認証、SQLite、showcase、todo route/view を含むため、アプリ開発の土台として使いやすいです。ただし projectName が todolist であるのに、README 上の主価値は汎用テンプレートであり、TODO アプリとしての独自価値は弱く見えます。\",\"evidence\":[\"README は local SQLite 対応の Web app template と説明している\",\"package description は optional login and showcase screens を中心にしている\",\"repoTree に api/routes/todo.route.ts と web/src/views/todo-list-view.tsx が存在する\"],\"concerns\":[\"TODO プロダクトとしての対象ユーザー、主要ワークフロー、差別化が明文化されていない\",\"テンプレート価値と todolist 価値が混在している\"]},{\"key\":\"implementationCompleteness\",\"label\":\"implementationCompleteness\",\"score\":76,\"confidence\":0.66,\"rationale\":\"API、DB migration、auth、frontend routes、tests、verify pipeline が揃っており、実装の面積は十分あります。todo route/view/test/migration も存在します。ただし README の API セクションには todo API がなく、提供情報だけでは todo 機能の完成度や UI 動線を確認できません。\",\"evidence\":[\"api/routes/auth.route.ts、health.route.ts、todo.route.ts が存在する\",\"drizzle/0002_todo_items.sql が存在する\",\"web/src/routes/todo-list-route.tsx と todo-list-view.tsx が存在する\",\"Vitest test files が auth、middleware、routes に複数存在する\"],\"concerns\":[\"todo 機能の仕様、永続化、認可範囲が文書から読み取れない\",\"実行・テスト結果が提供されていない\"]},{\"key\":\"architectureQuality\",\"label\":\"architectureQuality\",\"score\":79,\"confidence\":0.7,\"rationale\":\"Hono app composition、route、module、middleware、shared schemas、frontend views が分離されており、標準的で追いやすい構造です。frontend/backend の API 型共有も良い設計です。一方で、TODO ドメインの shared schema が repoTree 上で見えず、auth 以外の契約共有がどこまで徹底されているかは不明です。\",\"evidence\":[\"api/app/hono.ts が AppType を export し、frontend が hono/client で参照する方針\",\"api/modules/auth、api/middleware、api/routes の分離\",\"shared/schemas/auth.schema.ts が存在する\"],\"concerns\":[\"todo の共有 schema が repoTree に見えない\",\"template とアプリ固有機能の境界がまだ整理途上に見える\"]},{\"key\":\"maintainability\",\"label\":\"maintainability\",\"score\":72,\"confidence\":0.68,\"rationale\":\"ディレクトリ構成、README、LLM_CONTEXT、verify script により保守の入口は整っています。Biome、TypeScript、Vitest もあり、変更時の基本的な品質維持が期待できます。ただし README/package metadata と実際の todolist 要素にズレがあり、将来の agent や開発者が目的を誤認しやすい状態です。\",\"evidence\":[\"scripts/verify.ts が typecheck、lint、format、test、build を束ねる\",\"LLM_CONTEXT に task routing と implementation contracts がある\",\"README に主要パスと scripts が整理されている\"],\"concerns\":[\"プロジェクト名・README・package description の整合性が不足\",\"README の API 一覧が todo 実装を反映していない可能性がある\"]},{\"key\":\"security\",\"label\":\"security\",\"score\":74,\"confidence\":0.62,\"rationale\":\"httpOnly cookie、access/refresh token、JWT_SECRET の production fail closed、SameSite/Secure 条件など、テンプレートとして重要なセキュリティ配慮があります。auth 関連のテストも多く見えます。ただし実装詳細やテスト結果は未確認で、todo route に認可が適用されているかも提供情報だけでは判断できません。\",\"evidence\":[\"README に httpOnly Cookie による access / refresh token と記載\",\"JWT_SECRET は production で未設定または dev default なら起動失敗と記載\",\"AUTH_COOKIE_SAME_SITE=none では HTTPS または Secure が必要と記載\",\"auth-cookies、token.service、auth middleware の test files が存在する\"],\"concerns\":[\"todo API の認証・認可境界が未確認\",\"CSRF 対策や refresh token rotation の実装挙動は未検証\"]},{\"key\":\"testability\",\"label\":\"testability\",\"score\":80,\"confidence\":0.7,\"rationale\":\"Vitest、typecheck、Biome、build をまとめた verify pipeline があり、backend/auth/route のテストファイルも多いためテスト可能性は高いです。todo route test も存在します。ただし今回のコンテキストには実行結果がなく、frontend UI のテスト有無も限定的に見えます。\",\"evidence\":[\"package scripts に test、typecheck、lint、format:check、build、verify がある\",\"api/app、middleware、auth modules、routes に test files がある\",\"api/routes/todo.route.test.ts が存在する\"],\"concerns\":[\"テスト成功結果が未提供\",\"frontend の interaction や visual regression の検証は見えない\"]},{\"key\":\"documentation\",\"label\":\"documentation\",\"score\":71,\"confidence\":0.73,\"rationale\":\"README と LLM_CONTEXT は充実しており、setup、env、scripts、API、task routing、contracts がまとまっています。coding agent にとって入口は良いです。ただし todolist としての利用説明、todo API、画面操作、プロジェクト名の反映が不足しており、ドキュメントがテンプレート状態に寄っています。\",\"evidence\":[\"README に構成、セットアップ、環境変数、scripts、API がある\",\"LLM_CONTEXT に Repository Snapshot、Task Routing、Verification Matrix がある\",\"docs/template-variant-management.md が存在する\"],\"concerns\":[\"README が Hono Standard のままで todolist の説明が弱い\",\"README API 表に todo endpoint がない\"]},{\"key\":\"agentUsability\",\"label\":\"agentUsability\",\"score\":84,\"confidence\":0.76,\"rationale\":\"LLM_CONTEXT が非常に agent 向けで、変更種別ごとの読むべきファイル、避けるべき復活要素、検証コマンドが整理されています。README も構造化されており、coding agents が安全に作業開始しやすいです。弱点は、プロジェクト名と実態のズレにより、agent がテンプレート改善と TODO アプリ改善を混同しやすい点です。\",\"evidence\":[\"LLM_CONTEXT に Task Routing と Implementation Contracts がある\",\"Clone Adaptation Checklist がある\",\"Verification Matrix が変更種別ごとに分かれている\"],\"concerns\":[\"todolist 固有の agent guidance が不足\",\"README と package metadata の未更新が判断ノイズになる\"]},{\"key\":\"extensibility\",\"label\":\"extensibility\",\"score\":76,\"confidence\":0.68,\"rationale\":\"route/module/schema/view の分離、Drizzle migrations、shared schemas、React Router により機能追加しやすい土台です。todo 機能も追加 migration と route/view で拡張されているように見えます。ただし todo schema やドメイン構造が README/LLM_CONTEXT に反映されていないため、拡張方針の明瞭さは少し落ちます。\",\"evidence\":[\"api/routes、api/modules、shared/schemas、web/src/views の分離\",\"drizzle migration が auth と todo_items に分かれている\",\"React Router の route files が機能別に存在する\"],\"concerns\":[\"todo ドメインの拡張契約が文書化されていない\",\"テンプレート利用先の rename/adaptation が未完了に見える\"]},{\"key\":\"reliability\",\"label\":\"reliability\",\"score\":73,\"confidence\":0.63,\"rationale\":\"health route、migration script、verify pipeline、auth token rotation 方針など、信頼性を支える部品はあります。production JWT_SECRET の fail closed も良いです。ただし今回は起動確認、migration 適用、test 実行、build 成功が未確認であり、実運用時の信頼性は推定に留まります。\",\"evidence\":[\"GET /api/health がある\",\"bun run db:migrate と verify script がある\",\"production では弱い JWT_SECRET で起動失敗する設計が README に記載\"],\"concerns\":[\"runtime 動作は未確認\",\"SQLite migration の実適用結果は未確認\"]},{\"key\":\"strategicFit\",\"label\":\"strategicFit\",\"score\":68,\"confidence\":0.71,\"rationale\":\"primaryAudience が coding agents であるなら、LLM_CONTEXT と構造化 README により戦略適合は高めです。しかし projectName は todolist で、package name/README は hono-standard template のままなので、評価対象としての戦略が曖昧です。TODO アプリとして伸ばすのか、標準テンプレートとして維持するのかを決める必要があります。\",\"evidence\":[\"primaryAudience は coding agents\",\"targetWorkflow は evaluate project value and generate next improvements\",\"package name は hono-standard\",\"README title は Hono Standard\"],\"concerns\":[\"todolist と hono-standard の位置づけが矛盾している\",\"プロジェクトの成功条件がテンプレート基準かアプリ基準か不明\"]},{\"key\":\"ossProductValue\",\"label\":\"ossProductValue\",\"score\":70,\"confidence\":0.66,\"rationale\":\"MIT license、README、setup、scripts、env 説明があり、OSS テンプレートとして公開価値があります。依存関係も現代的で、Bun/Hono/React の標準例として有用です。一方で、todolist として公開するなら README、metadata、機能説明、スクリーンショット、利用シナリオが不足しています。\",\"evidence\":[\"license は MIT\",\"README に setup と production runtime の説明がある\",\"package files に dist-web、README、LICENSE、package.json が含まれる\"],\"concerns\":[\"OSS 利用者向けの todo 機能説明が不足\",\"テンプレートの clone 後チェックリストが残っており完成品感を下げる\"]}],\"strengths\":[\"Bun + Hono + React + SQLite の標準的なフルスタック構成がまとまっている\",\"認証、cookie、JWT、refresh token、production secret guard など基礎的な security 設計がある\",\"shared schema と AppType による frontend/backend 契約共有方針が明確\",\"Vitest、Biome、TypeScript、build を束ねた verify pipeline がある\",\"LLM_CONTEXT が agent の読む順序、変更境界、検証方針を具体的に支援している\",\"todo route/view/migration/test が存在し、テンプレートから実アプリ化する足場がある\"],\"weaknesses\":[\"projectName は todolist だが README と package metadata は hono-standard template のままで整合していない\",\"README の API セクションに todo endpoint がなく、todo 機能の仕様が見えにくい\",\"実行結果、テスト結果、build 成功結果が提供コンテキスト内で未確認\",\"TODO アプリとしての対象ユーザー、主要ワークフロー、完成条件が明文化されていない\",\"frontend UI のテストや実際の画面品質に関する証拠が少ない\",\"テンプレートとして残す範囲と todolist 固有に寄せる範囲が曖昧\"],\"improvementIdeas\":[{\"title\":\"プロジェクトの位置づけを todolist に統一する\",\"reason\":\"README、package metadata、LLM_CONTEXT が template 名のままだと、評価・実装・OSS 利用のすべてで目的がぶれます。\",\"expectedScoreImpact\":7,\"affectedDimensions\":[\"conceptValue\",\"documentation\",\"agentUsability\",\"strategicFit\",\"ossProductValue\"],\"suggestedPrompt\":\"このリポジトリを todolist アプリとして位置づけ、README、package.json、LLM_CONTEXT の名称・説明・主要ワークフローを整合させてください。\",\"acceptanceCriteria\":[\"package name と description が todolist の価値を表す\",\"README の冒頭が TODO アプリの目的と主要機能を説明している\",\"LLM_CONTEXT が todolist 固有の変更入口を含む\",\"template clone 後の未対応メモが完成品の説明と矛盾しない\"]},{\"title\":\"todo API と UI 仕様を README に追加する\",\"reason\":\"todo route/view/migration が存在するのに、公開 API と画面操作が文書化されていないため、利用者と agent が機能を把握しにくいです。\",\"expectedScoreImpact\":5,\"affectedDimensions\":[\"implementationCompleteness\",\"documentation\",\"agentUsability\",\"ossProductValue\"],\"suggestedPrompt\":\"README に todo 機能の API、認証要否、画面操作、データモデル概要を追加してください。\",\"acceptanceCriteria\":[\"todo endpoint の Method/Path/Description が API 表に載っている\",\"作成・完了・削除など対応済み操作が説明されている\",\"todo_items migration と仕様の対応が説明されている\",\"未実装の操作がある場合は明記されている\"]},{\"title\":\"verify 実行結果を評価可能な形で残す\",\"reason\":\"スクリプトとテストファイルは揃っていますが、成功実績がないため信頼性と完成度の評価が推定に留まります。\",\"expectedScoreImpact\":6,\"affectedDimensions\":[\"testability\",\"reliability\",\"implementationCompleteness\",\"ossProductValue\"],\"suggestedPrompt\":\"bun run verify を実行し、失敗があれば修正して、README または docs に現在の検証ステータスを簡潔に記録してください。\",\"acceptanceCriteria\":[\"bun run verify が成功する\",\"失敗した場合は原因と修正内容が記録されている\",\"検証対象が typecheck、lint、format:check、test、build を含む\",\"評価時点の未確認事項が残る場合は明記されている\"]},{\"title\":\"todo ドメインの shared schema を明確化する\",\"reason\":\"auth は shared schema 方針が明確ですが、todo の契約共有が見えないため、API と frontend の型安全性が機能単位で揃っているか判断しにくいです。\",\"expectedScoreImpact\":4,\"affectedDimensions\":[\"architectureQuality\",\"maintainability\",\"extensibility\",\"testability\"],\"suggestedPrompt\":\"todo の request/response schema を shared/schemas 配下に整理し、backend route と frontend client が同じ契約を参照するようにしてください。\",\"acceptanceCriteria\":[\"todo 用 schema が shared/schemas に存在する\",\"backend route が schema validation を使う\",\"frontend が手書きの重複型ではなく共有契約を参照する\",\"todo route test が schema 境界を確認している\"]},{\"title\":\"TODO アプリとしての最小ユーザーフローを定義する\",\"reason\":\"実装部品はありますが、ユーザーが何を達成できるアプリかが文書上曖昧です。完成条件を定義すると改善優先度が決めやすくなります。\",\"expectedScoreImpact\":5,\"affectedDimensions\":[\"conceptValue\",\"strategicFit\",\"reliability\",\"documentation\"],\"suggestedPrompt\":\"todolist の最小ユーザーフローと完成条件を docs に定義し、現在の実装が満たしている項目と未対応項目を分けてください。\",\"acceptanceCriteria\":[\"ログイン前後の利用可否が明記されている\",\"todo 作成、一覧、更新、削除の扱いが定義されている\",\"空状態、エラー状態、ロード状態の期待動作が定義されている\",\"未対応項目が TODO ではなく明確な backlog として整理されている\"]},{\"title\":\"OSS 利用者向けの実行確認情報を補強する\",\"reason\":\"セットアップ手順はありますが、初回起動後に何を見れば成功か、TODO 機能をどう試すかが不足しています。\",\"expectedScoreImpact\":4,\"affectedDimensions\":[\"documentation\",\"ossProductValue\",\"reliability\",\"agentUsability\"],\"suggestedPrompt\":\"README に初回起動後の確認手順、期待される画面、health check、todo 操作のスモークテストを追加してください。\",\"acceptanceCriteria\":[\"dev server 起動後の確認 URL が明記されている\",\"health endpoint の期待レスポンスが説明されている\",\"todo 操作の手動スモークテスト手順がある\",\"よくある設定ミスと対処が簡潔に書かれている\"]}],\"notVerified\":[\"追加コマンドは実行していないため、bun run verify、test、build の成否は未確認\",\"EvaluationPromptContext に含まれないソース本文は確認していない\",\"todo route/view の実際の挙動、認証要否、UI 品質は未確認\",\"SQLite migration の実適用と runtime 起動は未確認\",\"セキュリティ実装の詳細レビューや脆弱性検査は未実施\"]}"
+          }
+        }
+      },
+      "message": "Codex assistant response completed.",
+      "status": "item.completed"
+    },
+    {
+      "id": "55f106c7-6c7f-4071-b9ab-5939a5795df9",
+      "seq": 14,
+      "createdAt": "2026-06-28T06:36:32.224Z",
+      "phase": "judge",
+      "level": "checkpoint",
+      "source": "codex",
+      "payload": {
+        "usage": {
+          "inputTokens": 130293,
+          "cachedInputTokens": 83968,
+          "outputTokens": 5207,
+          "reasoningOutputTokens": 708
+        },
+        "providerEvent": {
+          "type": "turn.completed",
+          "usage": {
+            "input_tokens": "[REDACTED]",
+            "cached_input_tokens": "[REDACTED]",
+            "output_tokens": "[REDACTED]",
+            "reasoning_output_tokens": "[REDACTED]"
+          }
+        }
+      },
+      "message": "Codex turn completed.",
+      "status": "completed"
+    },
+    {
+      "id": "789f7974-efd9-4592-b3da-be1a0b1278d2",
+      "seq": 15,
+      "createdAt": "2026-06-28T06:36:32.348Z",
+      "phase": "save",
+      "level": "info",
+      "source": "evaluator",
+      "message": "Saving evaluation and generated improvement requests."
+    },
+    {
+      "id": "cb7e4e11-4c57-4ce3-9c08-cfa9e4119c99",
+      "seq": 16,
+      "createdAt": "2026-06-28T06:36:32.353Z",
+      "phase": "complete",
+      "level": "checkpoint",
+      "source": "evaluator",
+      "message": "Evaluation complete: 74 / 100.",
+      "payload": {
+        "evaluationId": "287a1347-4562-4ce3-bbbe-01050a097585",
+        "score": 74,
+        "confidence": 0.69
+      }
+    }
+  ],
+  "judgeRun": {
+    "judge": "codex-agent",
+    "status": "completed",
+    "model": "gpt-5.5",
+    "mode": "review-only",
+    "threadId": "019f0cef-5269-7911-8759-95f4787ccd4e",
+    "usage": {
+      "input_tokens": 130293,
+      "cached_input_tokens": 83968,
+      "output_tokens": 5207,
+      "reasoning_output_tokens": 708
+    }
+  },
+  "report": {
+    "schemaVersion": "project-evaluation-report/v1",
+    "baselinePrompt": "このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください",
+    "judge": {
+      "provider": "codex",
+      "model": "gpt-5.5",
+      "mode": "review-only"
+    },
+    "overallScore": 74,
+    "confidence": 0.69,
+    "summary": "Bun + Hono + React + SQLite の実用的なフルスタック雛形としては価値が高く、認証、共有スキーマ、検証スクリプト、LLM_CONTEXT まで揃っているため coding agents が次の改善に入りやすい構成です。一方で、評価対象名は todolist なのに README と package metadata は hono-standard template のままで、todo 機能の価値・操作・API が文書上ほぼ前面化されていません。実装は一定以上に揃っているように見えますが、今回は提供コンテキストのみのレビューであり、テストや実行結果は未確認です。",
+    "dimensions": [
+      {
+        "key": "conceptValue",
+        "label": "conceptValue",
+        "score": 78,
+        "confidence": 0.72,
+        "rationale": "Hono backend と React frontend を同一 origin で扱うテンプレートとして明確な価値があります。認証、SQLite、showcase、todo route/view を含むため、アプリ開発の土台として使いやすいです。ただし projectName が todolist であるのに、README 上の主価値は汎用テンプレートであり、TODO アプリとしての独自価値は弱く見えます。",
+        "evidence": [
+          "README は local SQLite 対応の Web app template と説明している",
+          "package description は optional login and showcase screens を中心にしている",
+          "repoTree に api/routes/todo.route.ts と web/src/views/todo-list-view.tsx が存在する"
+        ],
+        "concerns": [
+          "TODO プロダクトとしての対象ユーザー、主要ワークフロー、差別化が明文化されていない",
+          "テンプレート価値と todolist 価値が混在している"
+        ]
+      },
+      {
+        "key": "implementationCompleteness",
+        "label": "implementationCompleteness",
+        "score": 76,
+        "confidence": 0.66,
+        "rationale": "API、DB migration、auth、frontend routes、tests、verify pipeline が揃っており、実装の面積は十分あります。todo route/view/test/migration も存在します。ただし README の API セクションには todo API がなく、提供情報だけでは todo 機能の完成度や UI 動線を確認できません。",
+        "evidence": [
+          "api/routes/auth.route.ts、health.route.ts、todo.route.ts が存在する",
+          "drizzle/0002_todo_items.sql が存在する",
+          "web/src/routes/todo-list-route.tsx と todo-list-view.tsx が存在する",
+          "Vitest test files が auth、middleware、routes に複数存在する"
+        ],
+        "concerns": [
+          "todo 機能の仕様、永続化、認可範囲が文書から読み取れない",
+          "実行・テスト結果が提供されていない"
+        ]
+      },
+      {
+        "key": "architectureQuality",
+        "label": "architectureQuality",
+        "score": 79,
+        "confidence": 0.7,
+        "rationale": "Hono app composition、route、module、middleware、shared schemas、frontend views が分離されており、標準的で追いやすい構造です。frontend/backend の API 型共有も良い設計です。一方で、TODO ドメインの shared schema が repoTree 上で見えず、auth 以外の契約共有がどこまで徹底されているかは不明です。",
+        "evidence": [
+          "api/app/hono.ts が AppType を export し、frontend が hono/client で参照する方針",
+          "api/modules/auth、api/middleware、api/routes の分離",
+          "shared/schemas/auth.schema.ts が存在する"
+        ],
+        "concerns": [
+          "todo の共有 schema が repoTree に見えない",
+          "template とアプリ固有機能の境界がまだ整理途上に見える"
+        ]
+      },
+      {
+        "key": "maintainability",
+        "label": "maintainability",
+        "score": 72,
+        "confidence": 0.68,
+        "rationale": "ディレクトリ構成、README、LLM_CONTEXT、verify script により保守の入口は整っています。Biome、TypeScript、Vitest もあり、変更時の基本的な品質維持が期待できます。ただし README/package metadata と実際の todolist 要素にズレがあり、将来の agent や開発者が目的を誤認しやすい状態です。",
+        "evidence": [
+          "scripts/verify.ts が typecheck、lint、format、test、build を束ねる",
+          "LLM_CONTEXT に task routing と implementation contracts がある",
+          "README に主要パスと scripts が整理されている"
+        ],
+        "concerns": [
+          "プロジェクト名・README・package description の整合性が不足",
+          "README の API 一覧が todo 実装を反映していない可能性がある"
+        ]
+      },
+      {
+        "key": "security",
+        "label": "security",
+        "score": 74,
+        "confidence": 0.62,
+        "rationale": "httpOnly cookie、access/refresh token、JWT_SECRET の production fail closed、SameSite/Secure 条件など、テンプレートとして重要なセキュリティ配慮があります。auth 関連のテストも多く見えます。ただし実装詳細やテスト結果は未確認で、todo route に認可が適用されているかも提供情報だけでは判断できません。",
+        "evidence": [
+          "README に httpOnly Cookie による access / refresh token と記載",
+          "JWT_SECRET は production で未設定または dev default なら起動失敗と記載",
+          "AUTH_COOKIE_SAME_SITE=none では HTTPS または Secure が必要と記載",
+          "auth-cookies、token.service、auth middleware の test files が存在する"
+        ],
+        "concerns": [
+          "todo API の認証・認可境界が未確認",
+          "CSRF 対策や refresh token rotation の実装挙動は未検証"
+        ]
+      },
+      {
+        "key": "testability",
+        "label": "testability",
+        "score": 80,
+        "confidence": 0.7,
+        "rationale": "Vitest、typecheck、Biome、build をまとめた verify pipeline があり、backend/auth/route のテストファイルも多いためテスト可能性は高いです。todo route test も存在します。ただし今回のコンテキストには実行結果がなく、frontend UI のテスト有無も限定的に見えます。",
+        "evidence": [
+          "package scripts に test、typecheck、lint、format:check、build、verify がある",
+          "api/app、middleware、auth modules、routes に test files がある",
+          "api/routes/todo.route.test.ts が存在する"
+        ],
+        "concerns": [
+          "テスト成功結果が未提供",
+          "frontend の interaction や visual regression の検証は見えない"
+        ]
+      },
+      {
+        "key": "documentation",
+        "label": "documentation",
+        "score": 71,
+        "confidence": 0.73,
+        "rationale": "README と LLM_CONTEXT は充実しており、setup、env、scripts、API、task routing、contracts がまとまっています。coding agent にとって入口は良いです。ただし todolist としての利用説明、todo API、画面操作、プロジェクト名の反映が不足しており、ドキュメントがテンプレート状態に寄っています。",
+        "evidence": [
+          "README に構成、セットアップ、環境変数、scripts、API がある",
+          "LLM_CONTEXT に Repository Snapshot、Task Routing、Verification Matrix がある",
+          "docs/template-variant-management.md が存在する"
+        ],
+        "concerns": [
+          "README が Hono Standard のままで todolist の説明が弱い",
+          "README API 表に todo endpoint がない"
+        ]
+      },
+      {
+        "key": "agentUsability",
+        "label": "agentUsability",
+        "score": 84,
+        "confidence": 0.76,
+        "rationale": "LLM_CONTEXT が非常に agent 向けで、変更種別ごとの読むべきファイル、避けるべき復活要素、検証コマンドが整理されています。README も構造化されており、coding agents が安全に作業開始しやすいです。弱点は、プロジェクト名と実態のズレにより、agent がテンプレート改善と TODO アプリ改善を混同しやすい点です。",
+        "evidence": [
+          "LLM_CONTEXT に Task Routing と Implementation Contracts がある",
+          "Clone Adaptation Checklist がある",
+          "Verification Matrix が変更種別ごとに分かれている"
+        ],
+        "concerns": [
+          "todolist 固有の agent guidance が不足",
+          "README と package metadata の未更新が判断ノイズになる"
+        ]
+      },
+      {
+        "key": "extensibility",
+        "label": "extensibility",
+        "score": 76,
+        "confidence": 0.68,
+        "rationale": "route/module/schema/view の分離、Drizzle migrations、shared schemas、React Router により機能追加しやすい土台です。todo 機能も追加 migration と route/view で拡張されているように見えます。ただし todo schema やドメイン構造が README/LLM_CONTEXT に反映されていないため、拡張方針の明瞭さは少し落ちます。",
+        "evidence": [
+          "api/routes、api/modules、shared/schemas、web/src/views の分離",
+          "drizzle migration が auth と todo_items に分かれている",
+          "React Router の route files が機能別に存在する"
+        ],
+        "concerns": [
+          "todo ドメインの拡張契約が文書化されていない",
+          "テンプレート利用先の rename/adaptation が未完了に見える"
+        ]
+      },
+      {
+        "key": "reliability",
+        "label": "reliability",
+        "score": 73,
+        "confidence": 0.63,
+        "rationale": "health route、migration script、verify pipeline、auth token rotation 方針など、信頼性を支える部品はあります。production JWT_SECRET の fail closed も良いです。ただし今回は起動確認、migration 適用、test 実行、build 成功が未確認であり、実運用時の信頼性は推定に留まります。",
+        "evidence": [
+          "GET /api/health がある",
+          "bun run db:migrate と verify script がある",
+          "production では弱い JWT_SECRET で起動失敗する設計が README に記載"
+        ],
+        "concerns": [
+          "runtime 動作は未確認",
+          "SQLite migration の実適用結果は未確認"
+        ]
+      },
+      {
+        "key": "strategicFit",
+        "label": "strategicFit",
+        "score": 68,
+        "confidence": 0.71,
+        "rationale": "primaryAudience が coding agents であるなら、LLM_CONTEXT と構造化 README により戦略適合は高めです。しかし projectName は todolist で、package name/README は hono-standard template のままなので、評価対象としての戦略が曖昧です。TODO アプリとして伸ばすのか、標準テンプレートとして維持するのかを決める必要があります。",
+        "evidence": [
+          "primaryAudience は coding agents",
+          "targetWorkflow は evaluate project value and generate next improvements",
+          "package name は hono-standard",
+          "README title は Hono Standard"
+        ],
+        "concerns": [
+          "todolist と hono-standard の位置づけが矛盾している",
+          "プロジェクトの成功条件がテンプレート基準かアプリ基準か不明"
+        ]
+      },
+      {
+        "key": "ossProductValue",
+        "label": "ossProductValue",
+        "score": 70,
+        "confidence": 0.66,
+        "rationale": "MIT license、README、setup、scripts、env 説明があり、OSS テンプレートとして公開価値があります。依存関係も現代的で、Bun/Hono/React の標準例として有用です。一方で、todolist として公開するなら README、metadata、機能説明、スクリーンショット、利用シナリオが不足しています。",
+        "evidence": [
+          "license は MIT",
+          "README に setup と production runtime の説明がある",
+          "package files に dist-web、README、LICENSE、package.json が含まれる"
+        ],
+        "concerns": [
+          "OSS 利用者向けの todo 機能説明が不足",
+          "テンプレートの clone 後チェックリストが残っており完成品感を下げる"
+        ]
+      }
+    ],
+    "strengths": [
+      "Bun + Hono + React + SQLite の標準的なフルスタック構成がまとまっている",
+      "認証、cookie、JWT、refresh token、production secret guard など基礎的な security 設計がある",
+      "shared schema と AppType による frontend/backend 契約共有方針が明確",
+      "Vitest、Biome、TypeScript、build を束ねた verify pipeline がある",
+      "LLM_CONTEXT が agent の読む順序、変更境界、検証方針を具体的に支援している",
+      "todo route/view/migration/test が存在し、テンプレートから実アプリ化する足場がある"
+    ],
+    "weaknesses": [
+      "projectName は todolist だが README と package metadata は hono-standard template のままで整合していない",
+      "README の API セクションに todo endpoint がなく、todo 機能の仕様が見えにくい",
+      "実行結果、テスト結果、build 成功結果が提供コンテキスト内で未確認",
+      "TODO アプリとしての対象ユーザー、主要ワークフロー、完成条件が明文化されていない",
+      "frontend UI のテストや実際の画面品質に関する証拠が少ない",
+      "テンプレートとして残す範囲と todolist 固有に寄せる範囲が曖昧"
+    ],
+    "improvementIdeas": [
+      {
+        "title": "プロジェクトの位置づけを todolist に統一する",
+        "reason": "README、package metadata、LLM_CONTEXT が template 名のままだと、評価・実装・OSS 利用のすべてで目的がぶれます。",
+        "expectedScoreImpact": 7,
+        "affectedDimensions": [
+          "conceptValue",
+          "documentation",
+          "agentUsability",
+          "strategicFit",
+          "ossProductValue"
+        ],
+        "suggestedPrompt": "このリポジトリを todolist アプリとして位置づけ、README、package.json、LLM_CONTEXT の名称・説明・主要ワークフローを整合させてください。",
+        "acceptanceCriteria": [
+          "package name と description が todolist の価値を表す",
+          "README の冒頭が TODO アプリの目的と主要機能を説明している",
+          "LLM_CONTEXT が todolist 固有の変更入口を含む",
+          "template clone 後の未対応メモが完成品の説明と矛盾しない"
+        ]
+      },
+      {
+        "title": "todo API と UI 仕様を README に追加する",
+        "reason": "todo route/view/migration が存在するのに、公開 API と画面操作が文書化されていないため、利用者と agent が機能を把握しにくいです。",
+        "expectedScoreImpact": 5,
+        "affectedDimensions": [
+          "implementationCompleteness",
+          "documentation",
+          "agentUsability",
+          "ossProductValue"
+        ],
+        "suggestedPrompt": "README に todo 機能の API、認証要否、画面操作、データモデル概要を追加してください。",
+        "acceptanceCriteria": [
+          "todo endpoint の Method/Path/Description が API 表に載っている",
+          "作成・完了・削除など対応済み操作が説明されている",
+          "todo_items migration と仕様の対応が説明されている",
+          "未実装の操作がある場合は明記されている"
+        ]
+      },
+      {
+        "title": "verify 実行結果を評価可能な形で残す",
+        "reason": "スクリプトとテストファイルは揃っていますが、成功実績がないため信頼性と完成度の評価が推定に留まります。",
+        "expectedScoreImpact": 6,
+        "affectedDimensions": [
+          "testability",
+          "reliability",
+          "implementationCompleteness",
+          "ossProductValue"
+        ],
+        "suggestedPrompt": "bun run verify を実行し、失敗があれば修正して、README または docs に現在の検証ステータスを簡潔に記録してください。",
+        "acceptanceCriteria": [
+          "bun run verify が成功する",
+          "失敗した場合は原因と修正内容が記録されている",
+          "検証対象が typecheck、lint、format:check、test、build を含む",
+          "評価時点の未確認事項が残る場合は明記されている"
+        ]
+      },
+      {
+        "title": "todo ドメインの shared schema を明確化する",
+        "reason": "auth は shared schema 方針が明確ですが、todo の契約共有が見えないため、API と frontend の型安全性が機能単位で揃っているか判断しにくいです。",
+        "expectedScoreImpact": 4,
+        "affectedDimensions": [
+          "architectureQuality",
+          "maintainability",
+          "extensibility",
+          "testability"
+        ],
+        "suggestedPrompt": "todo の request/response schema を shared/schemas 配下に整理し、backend route と frontend client が同じ契約を参照するようにしてください。",
+        "acceptanceCriteria": [
+          "todo 用 schema が shared/schemas に存在する",
+          "backend route が schema validation を使う",
+          "frontend が手書きの重複型ではなく共有契約を参照する",
+          "todo route test が schema 境界を確認している"
+        ]
+      },
+      {
+        "title": "TODO アプリとしての最小ユーザーフローを定義する",
+        "reason": "実装部品はありますが、ユーザーが何を達成できるアプリかが文書上曖昧です。完成条件を定義すると改善優先度が決めやすくなります。",
+        "expectedScoreImpact": 5,
+        "affectedDimensions": [
+          "conceptValue",
+          "strategicFit",
+          "reliability",
+          "documentation"
+        ],
+        "suggestedPrompt": "todolist の最小ユーザーフローと完成条件を docs に定義し、現在の実装が満たしている項目と未対応項目を分けてください。",
+        "acceptanceCriteria": [
+          "ログイン前後の利用可否が明記されている",
+          "todo 作成、一覧、更新、削除の扱いが定義されている",
+          "空状態、エラー状態、ロード状態の期待動作が定義されている",
+          "未対応項目が TODO ではなく明確な backlog として整理されている"
+        ]
+      },
+      {
+        "title": "OSS 利用者向けの実行確認情報を補強する",
+        "reason": "セットアップ手順はありますが、初回起動後に何を見れば成功か、TODO 機能をどう試すかが不足しています。",
+        "expectedScoreImpact": 4,
+        "affectedDimensions": [
+          "documentation",
+          "ossProductValue",
+          "reliability",
+          "agentUsability"
+        ],
+        "suggestedPrompt": "README に初回起動後の確認手順、期待される画面、health check、todo 操作のスモークテストを追加してください。",
+        "acceptanceCriteria": [
+          "dev server 起動後の確認 URL が明記されている",
+          "health endpoint の期待レスポンスが説明されている",
+          "todo 操作の手動スモークテスト手順がある",
+          "よくある設定ミスと対処が簡潔に書かれている"
+        ]
+      }
+    ],
+    "notVerified": [
+      "追加コマンドは実行していないため、bun run verify、test、build の成否は未確認",
+      "EvaluationPromptContext に含まれないソース本文は確認していない",
+      "todo route/view の実際の挙動、認証要否、UI 品質は未確認",
+      "SQLite migration の実適用と runtime 起動は未確認",
+      "セキュリティ実装の詳細レビューや脆弱性検査は未実施"
+    ]
+  },
+  "delta": {
+    "previousEvaluationId": "de09bc07-5d20-4bc1-ac56-dae0f7e27ecc",
+    "scoreDelta": 2,
+    "confidenceDelta": 0.05,
+    "dimensionDeltas": [
+      {
+        "key": "conceptValue",
+        "previousScore": 88,
+        "currentScore": 78,
+        "delta": -10
+      },
+      {
+        "key": "implementationCompleteness",
+        "previousScore": 81,
+        "currentScore": 76,
+        "delta": -5
+      },
+      {
+        "key": "architectureQuality",
+        "previousScore": 76,
+        "currentScore": 79,
+        "delta": 3
+      },
+      {
+        "key": "maintainability",
+        "previousScore": 64,
+        "currentScore": 72,
+        "delta": 8
+      },
+      {
+        "key": "security",
+        "previousScore": 68,
+        "currentScore": 74,
+        "delta": 6
+      },
+      {
+        "key": "testability",
+        "previousScore": 73,
+        "currentScore": 80,
+        "delta": 7
+      },
+      {
+        "key": "documentation",
+        "previousScore": 66,
+        "currentScore": 71,
+        "delta": 5
+      },
+      {
+        "key": "agentUsability",
+        "previousScore": 69,
+        "currentScore": 84,
+        "delta": 15
+      },
+      {
+        "key": "extensibility",
+        "previousScore": 66,
+        "currentScore": 76,
+        "delta": 10
+      },
+      {
+        "key": "reliability",
+        "previousScore": 75,
+        "currentScore": 73,
+        "delta": -2
+      },
+      {
+        "key": "strategicFit",
+        "previousScore": 63,
+        "currentScore": 68,
+        "delta": 5
+      },
+      {
+        "key": "ossProductValue",
+        "previousScore": 71,
+        "currentScore": 70,
+        "delta": -1
+      }
+    ],
+    "newWeaknesses": [
+      "projectName は todolist だが README と package metadata は hono-standard template のままで整合していない",
+      "README の API セクションに todo endpoint がなく、todo 機能の仕様が見えにくい",
+      "実行結果、テスト結果、build 成功結果が提供コンテキスト内で未確認",
+      "TODO アプリとしての対象ユーザー、主要ワークフロー、完成条件が明文化されていない",
+      "frontend UI のテストや実際の画面品質に関する証拠が少ない",
+      "テンプレートとして残す範囲と todolist 固有に寄せる範囲が曖昧"
+    ],
+    "resolvedWeaknesses": [
+      "テスト実行結果が未確認",
+      "sample evaluation output が未確認"
+    ]
+  }
+}

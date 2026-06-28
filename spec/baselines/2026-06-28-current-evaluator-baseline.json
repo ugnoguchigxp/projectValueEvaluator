@@ -1,0 +1,1695 @@
+{
+  "bundle": {
+    "id": "ad2bc9eb-3731-4823-b590-ecbd74076544",
+    "projectId": "50e0289c-3458-4661-b8c4-3a3563175d45",
+    "evidenceLevel": "runtime-verified",
+    "projectRoot": "/Users/y.noguchi/Code/projectEvaluator",
+    "inputs": {
+      "systemContext": {
+        "targetProjectName": "project-value-evaluator",
+        "targetProjectRoot": "/Users/y.noguchi/Code/projectEvaluator",
+        "projectIdeal": "このプロジェクトが、対象ユーザーに明確な価値を提供し、実装・検証・文書・agent usability が揃った状態。",
+        "primaryAudience": "coding agents",
+        "targetWorkflow": "evaluate project value and generate next improvements",
+        "nonGoals": []
+      },
+      "readme": "# ProjectValueEvaluator\n\nProjectValueEvaluator は、ソフトウェアプロジェクトの現在価値を多角的に評点し、前回評価との差分と次の改善案を比較可能な形で残すための Hono + TypeScript ベースの評価サービスです。\n\n中心にある baseline prompt は次です。\n\n```text\nこのプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください\n```\n\nこのプロジェクトの役割は、上記の評価依頼を Codex-first で実行し、prompt、rubric、schema、provider 設定、保存履歴、前回比較を固定化することです。Codex を現在の主 judge としつつ、OpenAI / Azure OpenAI / Local LLM などの provider 拡張点は残します。\n\n## MVP\n\n再設計後の MVP は次の流れを目標にします。\n\n```text\nProjectProfile\n  -> EvaluationPromptContext\n  -> JudgeProviderAdapter\n  -> ProjectEvaluationReport v1\n  -> EvaluationDelta\n  -> ImprovementIdeas\n  -> Saved history\n```\n\n現在の実装は移行途中です。source truth は [Codex-First Multi-Agent Evaluation Implementation Plan](spec/codex-first-multi-agent-evaluation-implementation-plan.md) です。\n\n## 評価で扱うもの\n\n| Item | Purpose |\n| --- | --- |\n| `ProjectProfile` | Project Ideal、対象 workflow、non-goals、評価軸 |\n| `EvaluationPromptContext` | baseline prompt、対象 repo 情報、前回評価 summary、judge 設定 |\n| `ProjectEvaluationReport` | overall score、dimension score、confidence、根拠、弱点、改善案 |\n| `EvaluationDelta` | 前回評価との差分、dimension delta、新規/解消された弱点 |\n| `ImprovementIdea` | 評価結果から導かれた次の改善候補 |\n\n## Evidence Policy\n\nbaseline 評価は、Codex / LLMProvider に多角的な評点を依頼する経路です。アプリ側は、この経路で build、test、verify、source inspection を自動実行しません。\n\n評価結果には、judge が確認できなかった事項を `notVerified` として残します。runtime verification や audit-grade evidence は、後続の明示的な evidence collector として追加します。\n\n## 構成\n\n| Path | Role |\n| --- | --- |\n| `api/app/hono.ts` | Hono app composition、API route 登録、`AppType` export |\n| `api/routes/projects.route.ts` | ProjectProfile と project-scoped evaluation API |\n| `api/routes/evaluations.route.ts` | Evaluation / Improvement lookup API |\n| `api/modules/projects/` | ProjectProfile repository / service |\n| `api/modules/evaluations/` | prompt context、repository、service、delta、improvement generator |\n| `api/modules/llm/judge-client.ts` | Codex-first judge client。provider adapter 境界 |\n| `api/cli/` | evaluate / reevaluate CLI |\n| `shared/schemas/` | API / CLI / judge output 共有 Zod schema |\n| `drizzle/` | SQLite migrations |\n| `spec/` | 現行の実装計画 |\n\n## セットアップ\n\n```bash\nbun install\ncp .env.example .env\nbun run db:migrate\n```\n\n## CLI\n\n```bash\nbun run evaluator:evaluate -- --project /path/to/repo\nbun run evaluator:reevaluate -- --project /path/to/repo\n```\n\nJSON 出力:\n\n```bash\nbun run evaluator:evaluate -- --project /path/to/repo --json\n```\n\nprofile JSON を指定する場合:\n\n```bash\nbun run evaluator:evaluate -- --project /path/to/repo --profile project-profile.json\n```\n\n`project-profile.json` は `name`、`ideal`、`primaryAudience`、`targetWorkflow`、`nonGoals`、`dimensions` を上書きできます。`rootPath` は `--project` が優先されます。\n\n## API\n\n| Method | Path | Description |\n| --- | --- | --- |\n| `GET` | `/api/health` | health check |\n| `POST` | `/api/projects` | ProjectProfile 作成 |\n| `GET` | `/api/projects/:id` | ProjectProfile 取得 |\n| `POST` | `/api/projects/:id/evaluations` | 評価実行 |\n| `GET` | `/api/projects/:id/evaluations/latest` | 最新評価取得 |\n| `POST` | `/api/projects/:id/reevaluate` | 再評価実行 |\n| `GET` | `/api/evaluations/:id` | 評価取得 |\n| `GET` | `/api/evaluations/:id/improvements` | 改善依頼取得 |\n\n## 検証\n\n```bash\nbun run typecheck\nbun run lint\nbun run format:check\nbun run test\nbun run build\nbun run verify\n```\n\n## MVP Non-goals\n\n```text\n- 自動で改善実装を実行する agent orchestration\n- audit-grade のコード監査\n- runtime sandbox 実行\n- 複数 LLM による voting\n- 大きな dashboard\n- SaaS 的な multi-tenant user management\n```\n\n## 詳細仕様\n\n- [Codex-First Multi-Agent Evaluation Implementation Plan](spec/codex-first-multi-agent-evaluation-implementation-plan.md)\n",
+      "llmContext": "# LLM Context: ProjectValueEvaluator\n\nこのリポジトリは、Hono Standard を起点にした ProjectValueEvaluator の MVP です。目的は、普段の「このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください」という依頼を baseline prompt として固定し、Codex-first で評価を実行し、評点・改善案・前回差分を比較可能な形で保存することです。\n\n## Repository Snapshot\n\n- Backend は Bun + Hono。API composition は `api/app/hono.ts`。\n- DB は local SQLite + Drizzle。schema は `api/db/schema.ts`、migration は `drizzle/`。\n- MVP の主入口は CLI と評価ワークベンチ。`api/cli/evaluate.ts`、`api/cli/reevaluate.ts`、UI の Home/Settings が同じ評価 usecase を呼ぶ。\n- API は CLI と同じ usecase を呼ぶ。route は `api/routes/projects.route.ts` と `api/routes/evaluations.route.ts`。\n- 共有 schema は `shared/schemas/`。ProjectProfile、EvaluationPromptContext、ProjectEvaluationReport、EvaluationDelta、ImprovementIdea を Zod で定義する方向へ移行する。\n- Judge は `api/modules/llm/judge-client.ts`。現在の主経路は Codex SDK。OpenAI / Azure OpenAI / Local LLM は provider 抽象に残すが、未実装 adapter は `adapter-not-implemented` として扱う。\n- frontend は評価ワークベンチへ寄せる。Provider 設定は設定済み状態と実行可能状態を分けて表示する。\n\n## Core Flow\n\n```text\nProjectProfile\n  -> build EvaluationPromptContext\n  -> JudgeProviderAdapter\n  -> save ProjectEvaluationReport\n  -> compute EvaluationDelta\n  -> show ImprovementIdeas\n```\n\n## Top-Level Map\n\n| Path | Role |\n| --- | --- |\n| `api/app/hono.ts` | Hono middleware、API route、static fallback、`AppType` export |\n| `api/routes/projects.route.ts` | ProjectProfile 作成/取得、評価実行、再評価 |\n| `api/routes/evaluations.route.ts` | Evaluation / Improvement lookup |\n| `api/modules/projects/` | Project repository / service |\n| `api/modules/evaluations/bundle-builder.ts` | 移行対象。baseline 評価では EvaluationPromptContext builder に縮小する |\n| `api/modules/evaluations/evaluation.service.ts` | prompt context 作成、judge、保存、delta、改善案生成を束ねる usecase |\n| `api/modules/evaluations/evaluation.repository.ts` | prompt context / report / raw output / delta / improvement 永続化 |\n| `api/modules/evaluations/improvement-generator.ts` | report の improvementIdeas を保存用 request に変換 |\n| `api/modules/llm/judge-client.ts` | Codex-first judge client。provider adapter 境界 |\n| `shared/schemas/project.schema.ts` | ProjectProfile と評価軸 |\n| `shared/schemas/evaluation.schema.ts` | prompt context / report / delta / provider schema |\n| `spec/` | Codex-first multi-agent evaluation implementation plan |\n\n## Implementation Contracts\n\n- 評価結果は `overallScore` だけで返さない。必ず dimension score、confidence、rationale、evidence、concerns、weaknesses、improvementIdeas を含める。\n- baseline prompt は evaluation report と一緒に保存する。\n- 前回比較は保存済み report から deterministic に計算する。\n- Codex を現在の主 judge とするが、OpenAI / Azure OpenAI / Local LLM の provider 抽象は削らない。\n- 未実装 provider は暗黙 fallback せず、`adapter-not-implemented` として扱う。\n- CLI と API は同じ `EvaluationService` を使う。評価ロジックを二重実装しない。\n- DB では JSON 配列を text JSON として保存してよい。検索や集計が必要になった時点で正規化する。\n- Hono route の request / response shape は `shared/schemas/` を優先する。\n- Auth はテンプレート由来で残っているが、MVP 評価 API の中心ではない。必要になるまで拡張しない。\n\n## Commands\n\n| Command | Purpose |\n| --- | --- |\n| `bun run db:migrate` | SQLite migration を適用 |\n| `bun run evaluator:evaluate -- --project <path>` | 評価、gap 分析、改善依頼生成 |\n| `bun run evaluator:reevaluate -- --project <path>` | 再評価して delta を表示 |\n| `bun run typecheck` | TypeScript check |\n| `bun run lint` | Biome lint |\n| `bun run format:check` | Biome format check |\n| `bun run test` | Vitest |\n| `bun run build` | Vite production build |\n| `bun run verify` | full verification pipeline |\n\n## Verification Matrix\n\n| Change type | Minimum useful verification |\n| --- | --- |\n| Schema / domain model | `bun run typecheck` and targeted Vitest |\n| Prompt context / judge / improvement logic | `bunx vitest run api/modules/evaluations/evaluation.service.test.ts` |\n| DB schema / migration | `DATABASE_URL=/tmp/project-evaluator.sqlite bun run db:migrate` |\n| CLI flow | temp DB migration, then `evaluator:evaluate` and `evaluator:reevaluate` |\n| API flow | Hono `app.request` against `/api/projects` and `/api/projects/:id/evaluations` |\n| Broad change | `bun run verify` |\n\n## MVP Non-goals\n\n- Do not add automatic code improvement execution yet.\n- Do not remove non-Codex provider settings or schema support.\n- Do not run build/test/verify as part of baseline evaluation.\n- Do not claim audit-grade evidence without a separate explicit evidence collector.\n- Do not introduce a second API framework.\n",
+      "packageJson": {
+        "name": "project-value-evaluator",
+        "version": "1.0.0",
+        "description": "Project value evaluator that turns score gaps into improvement requests.",
+        "type": "module",
+        "author": "",
+        "license": "MIT",
+        "keywords": [
+          "hono",
+          "project-evaluation",
+          "coding-agents",
+          "typescript"
+        ],
+        "scripts": {
+          "dev": "bunx --bun vite",
+          "dev:vite": "vite",
+          "start": "bun run api/app/server.ts",
+          "auth:create-admin": "bun run api/cli/auth-create-admin.ts",
+          "evaluator:bundle": "bun run api/cli/bundle.ts",
+          "evaluator:evaluate": "bun run api/cli/evaluate.ts",
+          "evaluator:reevaluate": "bun run api/cli/reevaluate.ts",
+          "db:generate": "drizzle-kit generate",
+          "db:migrate": "bun run api/cli/migrate.ts",
+          "db:migrate:drizzle": "drizzle-kit migrate",
+          "test": "vitest run",
+          "test:watch": "vitest",
+          "typecheck": "tsc --noEmit",
+          "lint": "biome lint api web shared",
+          "format": "biome format --write api web shared",
+          "format:check": "biome format api web shared",
+          "build:web": "vite build",
+          "build": "bun run build:web",
+          "verify": "bun scripts/verify.ts",
+          "verify:strict": "bun run verify"
+        },
+        "files": [
+          "dist-web",
+          "README.md",
+          "LICENSE.md",
+          "package.json"
+        ],
+        "dependencies": {
+          "@hono/zod-validator": "0.8.0",
+          "@openai/codex-sdk": "^0.142.3",
+          "@tanstack/react-query": "5.101.0",
+          "@tanstack/react-router": "1.170.15",
+          "@tanstack/react-table": "8.21.3",
+          "drizzle-orm": "0.45.2",
+          "hono": "4.12.25",
+          "jose": "6.2.3",
+          "lucide-react": "1.18.0",
+          "react": "19.2.7",
+          "react-dom": "19.2.7",
+          "react-hook-form": "^7.79.0",
+          "zod": "4.4.3"
+        },
+        "devDependencies": {
+          "@biomejs/biome": "2.5.0",
+          "@hono/vite-dev-server": "0.26.0",
+          "@tailwindcss/vite": "^4.3.1",
+          "@types/bun": "1.3.14",
+          "@types/node": "25.9.3",
+          "@types/react": "19.2.17",
+          "@types/react-dom": "19.2.3",
+          "@vitejs/plugin-react": "6.0.2",
+          "drizzle-kit": "0.31.10",
+          "tailwindcss": "^4.3.1",
+          "typescript": "5.9.3",
+          "vite": "8.0.16",
+          "vitest": "4.1.8"
+        },
+        "overrides": {
+          "esbuild": "0.28.1",
+          "picomatch": "4.0.4",
+          "postcss": "8.5.15",
+          "rollup": "4.62.0",
+          "undici": "7.27.2",
+          "vite": "8.0.16",
+          "ws": "8.21.0"
+        }
+      },
+      "repoTree": [
+        ".dockerignore",
+        ".env.example",
+        ".gitignore",
+        ".husky/",
+        ".husky/pre-commit",
+        ".husky/pre-push",
+        "api/",
+        "api/app/",
+        "api/app/env.test.ts",
+        "api/app/env.ts",
+        "api/app/hono.test.ts",
+        "api/app/hono.ts",
+        "api/app/server.ts",
+        "api/cli/",
+        "api/cli/auth-create-admin.ts",
+        "api/cli/bundle.ts",
+        "api/cli/evaluate.ts",
+        "api/cli/evaluator-runtime.ts",
+        "api/cli/migrate.ts",
+        "api/cli/reevaluate.ts",
+        "api/config/",
+        "api/config/appDefaults.ts",
+        "api/db/",
+        "api/db/index.ts",
+        "api/db/schema.ts",
+        "api/middleware/",
+        "api/middleware/auth.test.ts",
+        "api/middleware/auth.ts",
+        "api/modules/",
+        "api/modules/auth/",
+        "api/modules/auth/auth-cookies.test.ts",
+        "api/modules/auth/auth-cookies.ts",
+        "api/modules/auth/auth.service.test.ts",
+        "api/modules/auth/auth.service.ts",
+        "api/modules/auth/context.test.ts",
+        "api/modules/auth/context.ts",
+        "api/modules/auth/errors.test.ts",
+        "api/modules/auth/errors.ts",
+        "api/modules/auth/password.test.ts",
+        "api/modules/auth/password.ts",
+        "api/modules/auth/token.service.test.ts",
+        "api/modules/auth/token.service.ts",
+        "api/modules/auth/types.test.ts",
+        "api/modules/auth/types.ts",
+        "api/modules/evaluations/",
+        "api/modules/evaluations/bundle-builder.ts",
+        "api/modules/evaluations/evaluation.repository.ts",
+        "api/modules/evaluations/evaluation.service.test.ts",
+        "api/modules/evaluations/evaluation.service.ts",
+        "api/modules/evaluations/improvement-generator.ts",
+        "api/modules/evaluations/score-utils.ts",
+        "api/modules/llm/",
+        "api/modules/llm/judge-client.test.ts",
+        "api/modules/llm/judge-client.ts",
+        "api/modules/projects/",
+        "api/modules/projects/project.repository.ts",
+        "api/modules/projects/project.service.test.ts",
+        "api/modules/projects/project.service.ts",
+        "api/routes/",
+        "api/routes/auth.route.test.ts",
+        "api/routes/auth.route.ts",
+        "api/routes/codex.route.ts",
+        "api/routes/evaluations.route.test.ts",
+        "api/routes/evaluations.route.ts",
+        "api/routes/health.route.test.ts",
+        "api/routes/health.route.ts",
+        "api/routes/projects.route.test.ts",
+        "api/routes/projects.route.ts",
+        "api/routes/system.route.test.ts",
+        "api/routes/system.route.ts",
+        "api/types/",
+        "api/types/hono-context.d.ts",
+        "biome.json",
+        "bun.lock",
+        "bunfig.toml",
+        "docs/",
+        "docs/template-variant-management.md",
+        "drizzle/",
+        "drizzle/0001_auth.sql",
+        "drizzle/0002_project_evaluator.sql",
+        "drizzle/0003_source_inspections.sql",
+        "drizzle/0004_project_soft_delete.sql",
+        "drizzle/0005_evaluation_activity_events.sql",
+        "drizzle.config.ts",
+        "LICENSE.md",
+        "LLM_CONTEXT.md",
+        "package.json",
+        "README.md",
+        "scripts/",
+        "scripts/verify.ts",
+        "shared/",
+        "shared/schemas/",
+        "shared/schemas/auth.schema.ts",
+        "shared/schemas/evaluation.schema.ts",
+        "shared/schemas/improvement.schema.ts",
+        "shared/schemas/project.schema.ts",
+        "spec/",
+        "spec/baselines/",
+        "spec/baselines/2026-06-28-current-evaluator-baseline.json",
+        "spec/codex-first-multi-agent-evaluation-implementation-plan.md",
+        "tsconfig.build.json",
+        "tsconfig.json",
+        "vite.config.ts",
+        "vitest.config.ts",
+        "web/",
+        "web/index.html",
+        "web/src/",
+        "web/src/api.ts",
+        "web/src/App.tsx",
+        "web/src/auth-context.tsx",
+        "web/src/domains/",
+        "web/src/domains/auth/",
+        "web/src/judge-settings-context.tsx",
+        "web/src/main.tsx",
+        "web/src/router.tsx",
+        "web/src/routes/",
+        "web/src/routes/home-route.tsx",
+        "web/src/routes/login-route.tsx",
+        "web/src/routes/root-route.tsx",
+        "web/src/routes/settings-route.tsx",
+        "web/src/routes/showcase-route.tsx",
+        "web/src/showcase-settings-context.tsx",
+        "web/src/showcase-table-search.ts",
+        "web/src/styles.css",
+        "web/src/ui-language-context.tsx",
+        "web/src/views/",
+        "web/src/views/home-view.tsx",
+        "web/src/views/login-view.tsx",
+        "web/src/views/settings-view.tsx",
+        "web/src/views/showcase-view.tsx",
+        "wiki-knowledge/",
+        "wiki-knowledge/pages/",
+        "wiki-knowledge/pages/tech/",
+        "wiki-knowledge/pages/tech/index.md",
+        "wiki-knowledge/wiki/"
+      ],
+      "scripts": {
+        "dev": "bunx --bun vite",
+        "dev:vite": "vite",
+        "start": "bun run api/app/server.ts",
+        "auth:create-admin": "bun run api/cli/auth-create-admin.ts",
+        "evaluator:bundle": "bun run api/cli/bundle.ts",
+        "evaluator:evaluate": "bun run api/cli/evaluate.ts",
+        "evaluator:reevaluate": "bun run api/cli/reevaluate.ts",
+        "db:generate": "drizzle-kit generate",
+        "db:migrate": "bun run api/cli/migrate.ts",
+        "db:migrate:drizzle": "drizzle-kit migrate",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit",
+        "lint": "biome lint api web shared",
+        "format": "biome format --write api web shared",
+        "format:check": "biome format api web shared",
+        "build:web": "vite build",
+        "build": "bun run build:web",
+        "verify": "bun scripts/verify.ts",
+        "verify:strict": "bun run verify"
+      },
+      "sourceInspectionPlan": [
+        {
+          "id": "entrypoint-flow",
+          "title": "主要ワークフローへの実行経路",
+          "objective": "evaluate project value and generate next improvements を開始する UI、API、CLI などの入口が、中核処理へ正しく接続されているかを確認する。",
+          "requiredRoles": [
+            "entrypoint",
+            "interface-boundary",
+            "core-logic"
+          ]
+        },
+        {
+          "id": "domain-logic",
+          "title": "対象プロジェクトの中核ロジック",
+          "objective": "README、Project Ideal、対象ワークフローで約束している価値が、実装上の中核ロジックとして存在するかを確認する。",
+          "requiredRoles": [
+            "core-logic",
+            "data-model"
+          ]
+        },
+        {
+          "id": "data-persistence",
+          "title": "状態管理と再現性",
+          "objective": "対象ワークフローに必要な状態、設定、保存データ、再実行時の一貫性が適切に扱われているかを確認する。",
+          "requiredRoles": [
+            "data-model",
+            "core-logic"
+          ]
+        },
+        {
+          "id": "external-boundary",
+          "title": "外部境界と失敗時挙動",
+          "objective": "認証、外部 API、ファイルシステム、コマンド実行、LLM などの境界が明示され、失敗時に対象ワークフローを誤魔化さないかを確認する。",
+          "requiredRoles": [
+            "external-boundary",
+            "interface-boundary"
+          ]
+        },
+        {
+          "id": "verification-signal",
+          "title": "検証可能性",
+          "objective": "テスト、verify、build など、対象プロジェクトの主張を確認できる検証経路があるかを確認する。",
+          "requiredRoles": [
+            "test-signal",
+            "entrypoint"
+          ]
+        },
+        {
+          "id": "agent-output-contract",
+          "title": "利用者へ渡る操作・出力契約",
+          "objective": "coding agents が evaluate project value and generate next improvements を実行・確認・改善できる粒度の操作、出力、エラー、文書が揃っているかを確認する。",
+          "requiredRoles": [
+            "core-logic",
+            "data-model",
+            "interface-boundary"
+          ]
+        }
+      ],
+      "sourceFiles": [
+        {
+          "path": "api/cli/evaluator-runtime.ts",
+          "role": "core-logic",
+          "checkIds": [
+            "domain-logic",
+            "data-persistence",
+            "agent-output-contract"
+          ],
+          "reason": "Project Ideal に関わる中核ロジックと業務判断を確認するため。",
+          "content": "import { readFile } from \"node:fs/promises\";\nimport path from \"node:path\";\nimport { readAppEnv } from \"../app/env\";\nimport { createDbConnection } from \"../db\";\nimport { EvaluationRepository } from \"../modules/evaluations/evaluation.repository\";\nimport { EvaluationService } from \"../modules/evaluations/evaluation.service\";\nimport { ProjectRepository } from \"../modules/projects/project.repository\";\nimport { ProjectService } from \"../modules/projects/project.service\";\nimport {\n\tprojectProfileInputSchema,\n\ttype ProjectProfile,\n\ttype ProjectProfileInput,\n} from \"../../shared/schemas/project.schema\";\nimport type {\n\tEvaluationBundle,\n\tEvaluationResponse,\n\tJudgeSelection,\n} from \"../../shared/schemas/evaluation.schema\";\nimport { defaultCodexJudgeSelection } from \"../modules/llm/judge-client\";\n\ntype ParsedArgs = {\n\tproject?: string;\n\tprofile?: string;\n\tjson: boolean;\n\tjudge: JudgeSelection;\n};\n\nfunction readRequiredValue(\n\targv: string[],\n\tindex: number,\n\tflag: string,\n): string {\n\tconst value = argv[index + 1];\n\tif (!value || value.startsWith(\"--\")) {\n\t\tthrow new Error(`Missing value for ${flag}.`);\n\t}\n\treturn value;\n}\n\nexport function parseEvaluatorArgs(argv: string[]): ParsedArgs {\n\tconst parsed: ParsedArgs = {\n\t\tjson: false,\n\t\tjudge: defaultCodexJudgeSelection,\n\t};\n\tfor (let index = 0; index < argv.length; index += 1) {\n\t\tconst arg = argv[index];\n\t\tif (arg === \"--json\") {\n\t\t\tparsed.json = true;\n\t\t\tcontinue;\n\t\t}\n\t\tif (arg === \"--project\") {\n\t\t\tparsed.project = readRequiredValue(argv, index, \"--project\");\n\t\t\tindex += 1;\n\t\t\tcontinue;\n\t\t}\n\t\tif (arg === \"--profile\") {\n\t\t\tparsed.profile = readRequiredValue(argv, index, \"--profile\");\n\t\t\tindex += 1;\n\t\t\tcontinue;\n\t\t}\n\t\tthrow new Error(`Unknown argument: ${arg}`);\n\t}\n\tif (!parsed.project) {\n\t\tthrow new Error(\"Missing required --project <path> argument.\");\n\t}\n\treturn parsed;\n}\n\nexport async function runEvaluatorCli(fn: () => Promise<void>): Promise<void> {\n\ttry {\n\t\tawait fn();\n\t} catch (error) {\n\t\tconsole.error(error instanceof Error ? error.message : String(error));\n\t\tprocess.exitCode = 1;\n\t}\n}\n\nasync function readProfileFile(\n\tprofilePath: string,\n): Promise<Partial<ProjectProfileInput>> {\n\tconst text = await readFile(profilePath, \"utf8\");\n\tconst parsed = JSON.parse(text) as unknown;\n\tif (!parsed || typeof parsed !== \"object\") {\n\t\tthrow new Error(\"Profile file must contain a JSON object.\");\n\t}\n\treturn parsed;\n}\n\nexport async function loadProjectInput(\n\targs: ParsedArgs,\n): Promise<ProjectProfileInput> {\n\tconst rootPath = path.resolve(args.project ?? \".\");\n\tconst fromFile = args.profile\n\t\t? await readProfileFile(path.resolve(args.profile))\n\t\t: {};\n\tconst packageJsonPath = path.join(rootPath, \"package.json\");\n\tlet fallbackName = path.basename(rootPath);\n\ttry {\n\t\tconst packageJson = JSON.parse(await readFile(packageJsonPath, \"utf8\")) as {\n\t\t\tname?: string;\n\t\t};\n\t\tfallbackName = packageJson.name ?? fallbackName;\n\t} catch {\n\t\t// The bundle builder records missing package.json; CLI profile loading can continue.\n\t}\n\treturn projectProfileInputSchema.parse({\n\t\tname: fallbackName,\n\t\tideal:\n\t\t\t\"このプロジェクトが、対象ユーザーに明確な価値を提供し、実装・検証・文書・agent usability が揃った状態。\",\n\t\t...fromFile,\n\t\trootPath,\n\t});\n}\n\nexport async function withEvaluatorServices<T>(\n\tfn: (services: {\n\t\tprojectService: ProjectService;\n\t\tevaluationService: EvaluationService;\n\t}) => Promise<T>,\n): Promise<T> {\n\tconst env = readAppEnv();\n\tconst connection = createDbConnection(env.databaseUrl);\n\ttry {\n\t\tconst projectService = new ProjectService(\n\t\t\tnew ProjectRepository(connection.db),\n\t\t);\n\t\tconst evaluationService = new EvaluationService(\n\t\t\tprojectService,\n\t\t\tnew EvaluationRepository(connection.db),\n\t\t);\n\t\treturn await fn({ projectService, evaluationService });\n\t} finally {\n\t\tconnection.client.close();\n\t}\n}\n\nexport async function findOrCreateCliProject(\n\tprojectService: ProjectService,\n\targs: ParsedArgs,\n): Promise<ProjectProfile> {\n\tconst projectInput = await loadProjectInput(args);\n\treturn projectService.findOrCreate(projectInput);\n}\n\nexport function printBundle(bundle: EvaluationBundle, json: boolean): void {\n\tif (json) {\n\t\tconsole.log(JSON.stringify({ bundle }, null, 2));\n\t\treturn;\n\t}\n\tconsole.log(`Bundle: ${bundle.id}`);\n\tconsole.log(`Project: ${bundle.projectId}`);\n\tconsole.log(`Evidence Level: ${bundle.evidenceLevel}`);\n\tconsole.log(`Inputs: ${Object.keys(bundle.inputs).join(\", \")}`);\n\tconsole.log(`Source Files: ${bundle.inputs.sourceFiles.length}`);\n\tconsole.log(`Verification Runs: ${bundle.inputs.verificationRuns.length}`);\n\tif (bundle.missingInputs.length > 0) {\n\t\tconsole.log(`Missing Inputs: ${bundle.missingInputs.join(\", \")}`);\n\t}\n}\n\nexport function printEvaluation(\n\tresult: EvaluationResponse,\n\tjson: boolean,\n): void {\n\tif (json) {\n\t\tconsole.log(JSON.stringify(result, null, 2));\n\t\treturn;\n\t}\n\tconst { evaluation, improvements } = result;\n\tconsole.log(`Evaluation: ${evaluation.id}`);\n\tconsole.log(`Score: ${evaluation.score} / ${evaluation.idealScore}`);\n\tconsole.log(`Confidence: ${evaluation.overallConfidence}`);\n\tconsole.log(`Evidence Level: ${evaluation.evidenceLevel}`);\n\tif (evaluation.scoreDelta !== undefined) {\n\t\tconsole.log(`Score Delta: ${evaluation.scoreDelta}`);\n\t}\n\tif (evaluation.confidenceDelta !== undefined) {\n\t\tconsole.log(`Confidence Delta: ${evaluation.confidenceDelta}`);\n\t}\n\tconsole.log(\"\\nVerification Runs:\");\n\tfor (const run of result.bundle.inputs.verificationRuns) {\n\t\tconsole.log(\n\t\t\t`- ${run.name}: ${run.status} (${run.durationMs}ms, exit ${run.exitCode ?? \"n/a\"})`,\n\t\t);\n\t}\n\tconsole.log(\"\\nSource Checks:\");\n\tfor (const inspection of evaluation.sourceInspections) {\n\t\tconsole.log(\n\t\t\t`- ${inspection.title}: ${inspection.status} (${inspection.files.length} files)`,\n\t\t);\n\t}\n\tconsole.log(\"\\nTop Gaps:\");\n\tfor (const gap of evaluation.gapsTo100.slice(0, 5)) {\n\t\tconsole.log(\n\t\t\t`- ${gap.title} (${gap.kind}, +${gap.expectedScoreGain} score, +${gap.expectedConfidenceGain} confidence)`,\n\t\t);\n\t}\n\tconsole.log(\"\\nNext Improvements:\");\n\tfor (const improvement of improvements.slice(0, 5)) {\n\t\tconsole.log(\n\t\t\t`${improvement.priority}. ${improvement.title} (${improvement.taskType})`,\n\t\t);\n\t}\n}\n",
+          "truncated": false
+        },
+        {
+          "path": "api/modules/evaluations/bundle-builder.ts",
+          "role": "core-logic",
+          "checkIds": [
+            "domain-logic",
+            "data-persistence",
+            "agent-output-contract"
+          ],
+          "reason": "Project Ideal に関わる中核ロジックと業務判断を確認するため。",
+          "content": "import { randomUUID } from \"node:crypto\";\nimport { execFile } from \"node:child_process\";\nimport type { Dirent } from \"node:fs\";\nimport { readdir, readFile } from \"node:fs/promises\";\nimport path from \"node:path\";\nimport { promisify } from \"node:util\";\nimport {\n\tevaluationBundleSchema,\n\ttype EvaluationBundle,\n\ttype ProjectValueEvaluation,\n\ttype SourceFileEvidence,\n\ttype SourceFileRole,\n\ttype SourceInspectionCheck,\n\ttype SourceInspectionCheckId,\n\ttype VerificationRun,\n} from \"../../../shared/schemas/evaluation.schema\";\nimport type { ProjectProfile } from \"../../../shared/schemas/project.schema\";\n\nconst execFileAsync = promisify(execFile);\n\nconst IGNORED_TREE_ENTRIES = new Set([\n\t\".git\",\n\t\".DS_Store\",\n\t\".env\",\n\t\".env.local\",\n\t\".env.test\",\n\t\"node_modules\",\n\t\"dist\",\n\t\"dist-web\",\n\t\"coverage\",\n\t\".vite\",\n\t\".next\",\n\t\".turbo\",\n\t\"sqlite.db\",\n]);\n\nconst MAX_TEXT_CHARS = 24_000;\nconst MAX_SOURCE_FILE_CHARS = 16_000;\nconst MAX_SOURCE_FILES = 18;\nconst MAX_SOURCE_FILES_PER_ROLE = 4;\nconst MAX_TREE_ENTRIES = 360;\nconst MAX_TREE_DEPTH = 4;\nconst MAX_VERIFICATION_OUTPUT_CHARS = 12_000;\nconst VERIFICATION_TIMEOUT_MS = 120_000;\n\nfunction compactSingleLine(value: string): string {\n\treturn value.replace(/\\s+/g, \" \").trim();\n}\n\nfunction buildSystemContext(project: ProjectProfile, projectRoot: string) {\n\treturn {\n\t\ttargetProjectName: project.name,\n\t\ttargetProjectRoot: projectRoot,\n\t\tprojectIdeal: project.ideal,\n\t\tprimaryAudience: project.primaryAudience,\n\t\ttargetWorkflow: project.targetWorkflow,\n\t\tnonGoals: project.nonGoals,\n\t};\n}\n\nfunction buildSourceInspectionPlan(\n\tproject: ProjectProfile,\n): SourceInspectionCheck[] {\n\tconst targetWorkflow = compactSingleLine(project.targetWorkflow);\n\tconst primaryAudience = compactSingleLine(project.primaryAudience);\n\treturn [\n\t\t{\n\t\t\tid: \"entrypoint-flow\",\n\t\t\ttitle: \"主要ワークフローへの実行経路\",\n\t\t\tobjective: `${targetWorkflow} を開始する UI、API、CLI などの入口が、中核処理へ正しく接続されているかを確認する。`,\n\t\t\trequiredRoles: [\"entrypoint\", \"interface-boundary\", \"core-logic\"],\n\t\t},\n\t\t{\n\t\t\tid: \"domain-logic\",\n\t\t\ttitle: \"対象プロジェクトの中核ロジック\",\n\t\t\tobjective:\n\t\t\t\t\"README、Project Ideal、対象ワークフローで約束している価値が、実装上の中核ロジックとして存在するかを確認する。\",\n\t\t\trequiredRoles: [\"core-logic\", \"data-model\"],\n\t\t},\n\t\t{\n\t\t\tid: \"data-persistence\",\n\t\t\ttitle: \"状態管理と再現性\",\n\t\t\tobjective:\n\t\t\t\t\"対象ワークフローに必要な状態、設定、保存データ、再実行時の一貫性が適切に扱われているかを確認する。\",\n\t\t\trequiredRoles: [\"data-model\", \"core-logic\"],\n\t\t},\n\t\t{\n\t\t\tid: \"external-boundary\",\n\t\t\ttitle: \"外部境界と失敗時挙動\",\n\t\t\tobjective:\n\t\t\t\t\"認証、外部 API、ファイルシステム、コマンド実行、LLM などの境界が明示され、失敗時に対象ワークフローを誤魔化さないかを確認する。\",\n\t\t\trequiredRoles: [\"external-boundary\", \"interface-boundary\"],\n\t\t},\n\t\t{\n\t\t\tid: \"verification-signal\",\n\t\t\ttitle: \"検証可能性\",\n\t\t\tobjective:\n\t\t\t\t\"テスト、verify、build など、対象プロジェクトの主張を確認できる検証経路があるかを確認する。\",\n\t\t\trequiredRoles: [\"test-signal\", \"entrypoint\"],\n\t\t},\n\t\t{\n\t\t\tid: \"agent-output-contract\",\n\t\t\ttitle: \"利用者へ渡る操作・出力契約\",\n\t\t\tobjective: `${primaryAudience} が ${targetWorkflow} を実行・確認・改善できる粒度の操作、出力、エラー、文書が揃っているかを確認する。`,\n\t\t\trequiredRoles: [\"core-logic\", \"data-model\", \"interface-boundary\"],\n\t\t},\n\t];\n}\n\nconst sourceFileExtensions = new Set([\n\t\".ts\",\n\t\".tsx\",\n\t\".js\",\n\t\".jsx\",\n\t\".mjs\",\n\t\".cjs\",\n\t\".py\",\n\t\".rs\",\n\t\".go\",\n\t\".java\",\n\t\".kt\",\n\t\".swift\",\n\t\".rb\",\n\t\".php\",\n]);\n\nasync function readOptionalText(\n\troot: string,\n\tfilename: string,\n\tmissingInputs: string[],\n): Promise<string | undefined> {\n\ttry {\n\t\tconst text = await readFile(path.join(root, filename), \"utf8\");\n\t\treturn text.slice(0, MAX_TEXT_CHARS);\n\t} catch {\n\t\tmissingInputs.push(filename);\n\t\treturn undefined;\n\t}\n}\n\nasync function readPackageJson(\n\troot: string,\n\tmissingInputs: string[],\n): Promise<Record<string, unknown> | undefined> {\n\tconst text = await readOptionalText(root, \"package.json\", missingInputs);\n\tif (!text) return undefined;\n\ttry {\n\t\treturn JSON.parse(text) as Record<string, unknown>;\n\t} catch {\n\t\tmissingInputs.push(\"package.json:invalid-json\");\n\t\treturn undefined;\n\t}\n}\n\nfunction packageScripts(\n\tpackageJson: Record<string, unknown> | undefined,\n): Record<string, string> {\n\tconst scripts = packageJson?.scripts;\n\tif (!scripts || typeof scripts !== \"object\") return {};\n\treturn Object.fromEntries(\n\t\tObject.entries(scripts).filter(\n\t\t\t(entry): entry is [string, string] => typeof entry[1] === \"string\",\n\t\t),\n\t);\n}\n\nfunction trimVerificationOutput(value: string): string {\n\tif (value.length <= MAX_VERIFICATION_OUTPUT_CHARS) return value;\n\treturn value.slice(-MAX_VERIFICATION_OUTPUT_CHARS);\n}\n\nfunction selectVerificationScripts(\n\tscripts: Record<string, string>,\n): Array<{ name: string; command: string[] }> {\n\tif (scripts.verify) {\n\t\treturn [{ name: \"verify\", command: [\"bun\", \"run\", \"verify\"] }];\n\t}\n\treturn [\"typecheck\", \"test\", \"build\"]\n\t\t.filter((name) => scripts[name])\n\t\t.map((name) => ({ name, command: [\"bun\", \"run\", name] }));\n}\n\nasync function runVerificationCommand(\n\troot: string,\n\tname: string,\n\tcommand: string[],\n): Promise<VerificationRun> {\n\tconst startedAt = Date.now();\n\ttry {\n\t\tconst { stdout, stderr } = await execFileAsync(\n\t\t\tcommand[0],\n\t\t\tcommand.slice(1),\n\t\t\t{\n\t\t\t\tcwd: root,\n\t\t\t\ttimeout: VERIFICATION_TIMEOUT_MS,\n\t\t\t\tmaxBuffer: MAX_VERIFICATION_OUTPUT_CHARS * 4,\n\t\t\t},\n\t\t);\n\t\treturn {\n\t\t\tname,\n\t\t\tcommand,\n\t\t\tstatus: \"passed\",\n\t\t\texitCode: 0,\n\t\t\tdurationMs: Date.now() - startedAt,\n\t\t\tstdout: trimVerificationOutput(stdout),\n\t\t\tstderr: trimVerificationOutput(stderr),\n\t\t};\n\t} catch (error) {\n\t\tconst commandError = error as {\n\t\t\tcode?: number | string;\n\t\t\tkilled?: boolean;\n\t\t\tsignal?: string;\n\t\t\tstdout?: string;\n\t\t\tstderr?: string;\n\t\t};\n\t\tconst timedOut =\n\t\t\tcommandError.killed === true || commandError.signal === \"SIGTERM\";\n\t\treturn {\n\t\t\tname,\n\t\t\tcommand,\n\t\t\tstatus: timedOut ? \"timed-out\" : \"failed\",\n\t\t\texitCode:\n\t\t\t\ttypeof commandError.code === \"number\" ? commandError.code : null,\n\t\t\tdurationMs: Date.now() - startedAt,\n\t\t\tstdout: trimVerificationOutput(commandError.stdout ?? \"\"),\n\t\t\tstderr: trimVerificationOutput(commandError.stderr ?? \"\"),\n\t\t};\n\t}\n}\n\nasync function runVerificationCommands(\n\troot: string,\n\tscripts: Record<string, string>,\n): Promise<VerificationRun[]> {\n\tconst selected = selectVerificationScripts(scripts);\n\tconst runs: VerificationRun[] = [];\n\tfor (const item of selected) {\n\t\truns.push(await runVerificationCommand(root, item.name, item.command));\n\t}\n\treturn runs;\n}\n\nasync function collectTree(\n\troot: string,\n\tcurrent: string,\n\tdepth: number,\n\tentries: string[],\n): Promise<void> {\n\tif (entries.length >= MAX_TREE_ENTRIES || depth > MAX_TREE_DEPTH) return;\n\tlet dirents: Dirent[];\n\ttry {\n\t\tdirents = await readdir(path.join(root, current), { withFileTypes: true });\n\t} catch {\n\t\treturn;\n\t}\n\tfor (const dirent of dirents.sort((a, b) => a.name.localeCompare(b.name))) {\n\t\tif (entries.length >= MAX_TREE_ENTRIES) return;\n\t\tif (IGNORED_TREE_ENTRIES.has(dirent.name)) continue;\n\t\tif (dirent.name.endsWith(\".sqlite\") || dirent.name.endsWith(\".sqlite3\")) {\n\t\t\tcontinue;\n\t\t}\n\t\tconst relativePath = path.join(current, dirent.name);\n\t\tentries.push(dirent.isDirectory() ? `${relativePath}/` : relativePath);\n\t\tif (dirent.isDirectory()) {\n\t\t\tawait collectTree(root, relativePath, depth + 1, entries);\n\t\t}\n\t}\n}\n\nfunction isLogicSourceFile(relativePath: string): boolean {\n\tconst extension = path.extname(relativePath);\n\tif (!sourceFileExtensions.has(extension)) return false;\n\tif (relativePath.includes(\".d.ts\")) return false;\n\tif (relativePath.includes(\"/generated/\")) return false;\n\treturn (\n\t\t!relativePath.endsWith(\".config.ts\") && !relativePath.endsWith(\".config.js\")\n\t);\n}\n\nconst domainKeywordStopWords = new Set([\n\t\"and\",\n\t\"the\",\n\t\"for\",\n\t\"from\",\n\t\"with\",\n\t\"that\",\n\t\"this\",\n\t\"project\",\n\t\"users\",\n\t\"user\",\n\t\"items\",\n\t\"item\",\n\t\"manage\",\n\t\"create\",\n\t\"reliably\",\n\t\"through\",\n\t\"対象\",\n\t\"主要\",\n\t\"実行\",\n\t\"改善\",\n\t\"状態\",\n\t\"ユーザー\",\n\t\"プロジェクト\",\n]);\n\nfunction projectDomainKeywords(project: ProjectProfile): Set<string> {\n\tconst text = [\n\t\tproject.name,\n\t\tproject.ideal,\n\t\tproject.primaryAudience,\n\t\tproject.targetWorkflow,\n\t\t...project.nonGoals,\n\t].join(\" \");\n\tconst tokens = text\n\t\t.toLowerCase()\n\t\t.split(/[^a-z0-9一-龠ぁ-んァ-ヶー]+/u)\n\t\t.map((token) => token.trim())\n\t\t.filter((token) => token.length >= 3)\n\t\t.filter((token) => !domainKeywordStopWords.has(token));\n\treturn new Set(tokens.slice(0, 16));\n}\n\nfunction hasDomainKeyword(\n\tnormalizedPath: string,\n\tkeywords: Set<string>,\n): boolean {\n\tfor (const keyword of keywords) {\n\t\tif (normalizedPath.includes(keyword)) return true;\n\t}\n\treturn false;\n}\n\nfunction classifySourceFile(\n\trelativePath: string,\n\tkeywords: Set<string>,\n): SourceFileRole | null {\n\tconst normalized = relativePath.toLowerCase();\n\tconst basename = path.basename(normalized);\n\tif (\n\t\tnormalized.includes(\".test.\") ||\n\t\tnormalized.includes(\".spec.\") ||\n\t\tnormalized.includes(\"__tests__/\") ||\n\t\tnormalized.includes(\"/test/\")\n\t) {\n\t\treturn \"test-signal\";\n\t}\n\tif (\n\t\tnormalized.includes(\"llm\") ||\n\t\tnormalized.includes(\"codex\") ||\n\t\tnormalized.includes(\"client\") ||\n\t\tnormalized.includes(\"adapter\") ||\n\t\tnormalized.includes(\"provider\") ||\n\t\tnormalized.includes(\"auth\") ||\n\t\tnormalized.includes(\"middleware\") ||\n\t\tnormalized.includes(\"security\")\n\t) {\n\t\treturn \"external-boundary\";\n\t}\n\tif (\n\t\tnormalized.includes(\"schema\") ||\n\t\tnormalized.includes(\"repository\") ||\n\t\tnormalized.includes(\"/db/\") ||\n\t\tnormalized.includes(\"model\") ||\n\t\tnormalized.includes(\"types\")\n\t) {\n\t\treturn \"data-model\";\n\t}\n\tif (\n\t\tnormalized.includes(\"service\") ||\n\t\tnormalized.includes(\"domain\") ||\n\t\tnormalized.includes(\"usecase\") ||\n\t\tnormalized.includes(\"workflow\") ||\n\t\tnormalized.includes(\"pipeline\") ||\n\t\tnormalized.includes(\"evaluator\") ||\n\t\tnormalized.includes(\"judge\") ||\n\t\tnormalized.includes(\"generator\") ||\n\t\tnormalized.includes(\"builder\") ||\n\t\tnormalized.includes(\"engine\")\n\t) {\n\t\treturn \"core-logic\";\n\t}\n\tif (\n\t\tnormalized.includes(\"/route\") ||\n\t\tnormalized.includes(\"routes/\") ||\n\t\tnormalized.includes(\"/api/\") ||\n\t\tnormalized.includes(\"/cli/\") ||\n\t\tnormalized.includes(\"/views/\") ||\n\t\tnormalized.includes(\"/pages/\") ||\n\t\tnormalized.includes(\"/components/\") ||\n\t\tnormalized.includes(\"controller\") ||\n\t\tbasename.includes(\"view\") ||\n\t\tbasename.includes(\"page\") ||\n\t\tbasename.includes(\"component\") ||\n\t\tbasename.includes(\"server\")\n\t) {\n\t\treturn \"interface-boundary\";\n\t}\n\tif (hasDomainKeyword(normalized, keywords)) {\n\t\treturn relativePath.endsWith(\".tsx\") || relativePath.endsWith(\".jsx\")\n\t\t\t? \"interface-boundary\"\n\t\t\t: \"core-logic\";\n\t}\n\tif (\n\t\tbasename === \"main.ts\" ||\n\t\tbasename === \"main.tsx\" ||\n\t\tbasename === \"index.ts\" ||\n\t\tbasename === \"index.tsx\" ||\n\t\tbasename === \"app.ts\" ||\n\t\tbasename === \"app.tsx\"\n\t) {\n\t\treturn \"entrypoint\";\n\t}\n\treturn null;\n}\n\nfunction sourceCheckIdsForRole(\n\trole: SourceFileRole,\n): SourceInspectionCheckId[] {\n\tconst idsByRole: Record<SourceFileRole, SourceInspectionCheckId[]> = {\n\t\tentrypoint: [\"entrypoint-flow\", \"verification-signal\"],\n\t\t\"interface-boundary\": [\n\t\t\t\"entrypoint-flow\",\n\t\t\t\"external-boundary\",\n\t\t\t\"agent-output-contract\",\n\t\t],\n\t\t\"core-logic\": [\"domain-logic\", \"data-persistence\", \"agent-output-contract\"],\n\t\t\"data-model\": [\"domain-logic\", \"data-persistence\", \"agent-output-contract\"],\n\t\t\"external-boundary\": [\"external-boundary\"],\n\t\t\"test-signal\": [\"verification-signal\"],\n\t};\n\treturn idsByRole[role];\n}\n\nfunction sourceFileReason(role: SourceFileRole): string {\n\tconst reasons: Record<SourceFileRole, string> = {\n\t\tentrypoint:\n\t\t\t\"実行入口として、対象ワークフローの中核処理へ接続される経路を確認するため。\",\n\t\t\"interface-boundary\":\n\t\t\t\"外部入力を受け取り対象ワークフローへ渡す境界を確認するため。\",\n\t\t\"core-logic\":\n\t\t\t\"Project Ideal に関わる中核ロジックと業務判断を確認するため。\",\n\t\t\"data-model\":\n\t\t\t\"対象ワークフローの状態、データ構造、保存形式の契約を確認するため。\",\n\t\t\"external-boundary\":\n\t\t\t\"LLM、Codex、認証、外部コマンドなどの境界と失敗時挙動を確認するため。\",\n\t\t\"test-signal\": \"対象プロジェクトの信頼度を支える検証経路を確認するため。\",\n\t};\n\treturn reasons[role];\n}\n\nfunction sortSourceCandidates(\n\ta: { path: string; role: SourceFileRole },\n\tb: { path: string; role: SourceFileRole },\n): number {\n\tconst roleRank: Record<SourceFileRole, number> = {\n\t\t\"core-logic\": 0,\n\t\t\"interface-boundary\": 1,\n\t\t\"data-model\": 2,\n\t\t\"external-boundary\": 3,\n\t\tentrypoint: 4,\n\t\t\"test-signal\": 5,\n\t};\n\tconst roleDelta = roleRank[a.role] - roleRank[b.role];\n\treturn roleDelta === 0 ? a.path.localeCompare(b.path) : roleDelta;\n}\n\nasync function collectSourceFiles(\n\troot: string,\n\trepoTree: string[],\n\tproject: ProjectProfile,\n): Promise<SourceFileEvidence[]> {\n\tconst keywords = projectDomainKeywords(project);\n\tconst candidates = repoTree\n\t\t.filter((entry) => !entry.endsWith(\"/\"))\n\t\t.filter(isLogicSourceFile)\n\t\t.map((entry) => ({\n\t\t\tpath: entry,\n\t\t\trole: classifySourceFile(entry, keywords),\n\t\t}))\n\t\t.filter((candidate): candidate is { path: string; role: SourceFileRole } =>\n\t\t\tBoolean(candidate.role),\n\t\t)\n\t\t.sort(sortSourceCandidates);\n\n\tconst roleCounts = new Map<SourceFileRole, number>();\n\tconst selected: { path: string; role: SourceFileRole }[] = [];\n\tfor (const candidate of candidates) {\n\t\tif (selected.length >= MAX_SOURCE_FILES) break;\n\t\tconst count = roleCounts.get(candidate.role) ?? 0;\n\t\tif (count >= MAX_SOURCE_FILES_PER_ROLE) continue;\n\t\tselected.push(candidate);\n\t\troleCounts.set(candidate.role, count + 1);\n\t}\n\n\tconst sourceFiles: SourceFileEvidence[] = [];\n\tfor (const candidate of selected) {\n\t\ttry {\n\t\t\tconst content = await readFile(path.join(root, candidate.path), \"utf8\");\n\t\t\tsourceFiles.push({\n\t\t\t\tpath: candidate.path,\n\t\t\t\trole: candidate.role,\n\t\t\t\tcheckIds: sourceCheckIdsForRole(candidate.role),\n\t\t\t\treason: sourceFileReason(candidate.role),\n\t\t\t\tcontent: content.slice(0, MAX_SOURCE_FILE_CHARS),\n\t\t\t\ttruncated: content.length > MAX_SOURCE_FILE_CHARS,\n\t\t\t});\n\t\t} catch {\n\t\t\t// Missing source files are already represented by the repo tree snapshot.\n\t\t}\n\t}\n\treturn sourceFiles;\n}\n\nexport async function buildEvaluationBundle(params: {\n\tproject: ProjectProfile;\n\tprojectRoot?: string;\n\tpreviousEvaluation?: ProjectValueEvaluation | null;\n}): Promise<EvaluationBundle> {\n\tconst projectRoot = path.resolve(\n\t\tparams.projectRoot ?? params.project.rootPath,\n\t);\n\tconst missingInputs: string[] = [];\n\tconst readme = await readOptionalText(\n\t\tprojectRoot,\n\t\t\"README.md\",\n\t\tmissingInputs,\n\t);\n\tconst llmContext = await readOptionalText(\n\t\tprojectRoot,\n\t\t\"LLM_CONTEXT.md\",\n\t\tmissingInputs,\n\t);\n\tconst agents = await readOptionalText(\n\t\tprojectRoot,\n\t\t\"AGENTS.md\",\n\t\tmissingInputs,\n\t);\n\tconst packageJson = await readPackageJson(projectRoot, missingInputs);\n\tconst repoTree: string[] = [];\n\tawait collectTree(projectRoot, \"\", 1, repoTree);\n\tif (repoTree.length === 0) {\n\t\tmissingInputs.push(\"repo-tree\");\n\t}\n\tconst systemContext = buildSystemContext(params.project, projectRoot);\n\tconst sourceInspectionPlan = buildSourceInspectionPlan(params.project);\n\tconst scripts = packageScripts(packageJson);\n\tconst sourceFiles = await collectSourceFiles(\n\t\tprojectRoot,\n\t\trepoTree,\n\t\tparams.project,\n\t);\n\tconst verificationRuns = await runVerificationCommands(projectRoot, scripts);\n\tconst executedVerificationNames = new Set(\n\t\tverificationRuns.map((run) => run.name),\n\t);\n\tconst testsExecuted =\n\t\texecutedVerificationNames.has(\"verify\") ||\n\t\texecutedVerificationNames.has(\"test\");\n\tconst buildExecuted =\n\t\texecutedVerificationNames.has(\"verify\") ||\n\t\texecutedVerificationNames.has(\"build\");\n\tconst notVerified = [\n\t\tbuildExecuted ? undefined : \"ローカルビルド\",\n\t\ttestsExecuted ? undefined : \"テスト実行\",\n\t\t\"ランタイム挙動\",\n\t\t\"ソースコード全量の監査\",\n\t\t\"サンプル出力の品質\",\n\t\t\"監査級のセキュリティ挙動\",\n\t].filter((value): value is string => Boolean(value));\n\n\treturn evaluationBundleSchema.parse({\n\t\tid: randomUUID(),\n\t\tprojectId: params.project.id,\n\t\tevidenceLevel:\n\t\t\tverificationRuns.length > 0\n\t\t\t\t? \"runtime-verified\"\n\t\t\t\t: sourceFiles.length > 0\n\t\t\t\t\t? \"code-sampled\"\n\t\t\t\t\t: \"repo-structure\",\n\t\tprojectRoot,\n\t\tinputs: {\n\t\t\tsystemContext,\n\t\t\treadme,\n\t\t\tllmContext,\n\t\t\tagents,\n\t\t\tpackageJson,\n\t\t\trepoTree,\n\t\t\tscripts,\n\t\t\tsourceInspectionPlan,\n\t\t\tsourceFiles,\n\t\t\tverificationRuns,\n\t\t\tpreviousEvaluation: params.previousEvaluation ?? undefined,\n\t\t},\n\t\tinspectedInputs: {\n\t\t\treadme: Boolean(readme),\n\t\t\tllmContext: Boolean(llmContext),\n\t\t\tagents: Boolean(agents),\n\t\t\tpackageJson: Boolean(packageJson),\n\t\t\trepoTree: repoTree.length > 0,\n\t\t\tsourceFilesSampled: sourceFiles.map((file) => file.path),\n\t\t\ttestsExecuted,\n\t\t\tbuildExecuted,\n\t\t\tappLaunched: false,\n\t\t",
+          "truncated": true
+        },
+        {
+          "path": "api/modules/evaluations/evaluation.service.ts",
+          "role": "core-logic",
+          "checkIds": [
+            "domain-logic",
+            "data-persistence",
+            "agent-output-contract"
+          ],
+          "reason": "Project Ideal に関わる中核ロジックと業務判断を確認するため。",
+          "content": "import { randomUUID } from \"node:crypto\";\nimport type {\n\tEvaluationActivityEvent,\n\tEvaluationBundle,\n\tEvaluationResponse,\n\tJudgeRun,\n\tJudgeSelection,\n\tProjectValueEvaluation,\n} from \"../../../shared/schemas/evaluation.schema\";\nimport type { ProjectService } from \"../projects/project.service\";\nimport { judgeProjectValue as defaultJudgeProjectValue } from \"../llm/judge-client\";\nimport { buildEvaluationBundle } from \"./bundle-builder\";\nimport type { EvaluationRepository } from \"./evaluation.repository\";\nimport { generateImprovementRequests } from \"./improvement-generator\";\nimport { HttpError } from \"../auth/errors\";\n\nexport type EvaluationActivityEmitter = (\n\tevent: Omit<EvaluationActivityEvent, \"id\" | \"seq\" | \"createdAt\">,\n) => Promise<void> | void;\n\nexport type EvaluationActivityObserver = (\n\tevent: EvaluationActivityEvent,\n) => Promise<void> | void;\n\nexport type JudgeProjectValueFn = (params: {\n\tproject: Awaited<ReturnType<ProjectService[\"get\"]>>;\n\tbundle: EvaluationBundle;\n\tpreviousEvaluation?: ProjectValueEvaluation | null;\n\tjudge?: JudgeSelection;\n\temitActivity?: EvaluationActivityEmitter;\n}) => Promise<{\n\tevaluation: ProjectValueEvaluation;\n\trawOutput: unknown;\n\tjudgeRun: JudgeRun;\n}>;\n\nexport class EvaluationService {\n\tconstructor(\n\t\tprivate readonly projects: ProjectService,\n\t\tprivate readonly evaluations: EvaluationRepository,\n\t\tprivate readonly judgeProjectValue: JudgeProjectValueFn = defaultJudgeProjectValue,\n\t) {}\n\n\tasync evaluateProject(params: {\n\t\tprojectId: string;\n\t\tprojectRoot?: string;\n\t\tjudge?: JudgeSelection;\n\t\temitActivity?: EvaluationActivityObserver;\n\t}): Promise<EvaluationResponse> {\n\t\tconst activityEvents: EvaluationActivityEvent[] = [];\n\t\tlet seq = 0;\n\t\tconst emit: EvaluationActivityEmitter = async (event) => {\n\t\t\tconst activity = {\n\t\t\t\tid: randomUUID(),\n\t\t\t\tseq: seq++,\n\t\t\t\tcreatedAt: new Date().toISOString(),\n\t\t\t\t...event,\n\t\t\t};\n\t\t\tactivityEvents.push(activity);\n\t\t\tawait params.emitActivity?.(activity);\n\t\t};\n\t\tawait emit({\n\t\t\tphase: \"project\",\n\t\t\tlevel: \"info\",\n\t\t\tsource: \"evaluator\",\n\t\t\tmessage: \"Loading project profile.\",\n\t\t});\n\t\tconst project = await this.projects.get(params.projectId);\n\t\tawait emit({\n\t\t\tphase: \"history\",\n\t\t\tlevel: \"info\",\n\t\t\tsource: \"evaluator\",\n\t\t\tmessage: \"Loading previous evaluation.\",\n\t\t});\n\t\tconst previousEvaluation = await this.evaluations.findLatestEvaluation(\n\t\t\tproject.id,\n\t\t);\n\t\tawait emit({\n\t\t\tphase: \"bundle\",\n\t\t\tlevel: \"info\",\n\t\t\tsource: \"evaluator\",\n\t\t\tmessage: \"Building evaluation bundle and verification evidence.\",\n\t\t});\n\t\tconst bundle = await buildEvaluationBundle({\n\t\t\tproject,\n\t\t\tprojectRoot: params.projectRoot,\n\t\t\tpreviousEvaluation,\n\t\t});\n\t\tawait emit({\n\t\t\tphase: \"bundle\",\n\t\t\tlevel: \"checkpoint\",\n\t\t\tsource: \"evaluator\",\n\t\t\tmessage: `Bundle ready: ${bundle.inputs.sourceFiles.length} source files, ${bundle.inputs.verificationRuns.length} verification run(s).`,\n\t\t\tpayload: {\n\t\t\t\tevidenceLevel: bundle.evidenceLevel,\n\t\t\t\tsourceFiles: bundle.inputs.sourceFiles.map((file) => file.path),\n\t\t\t\tverificationRuns: bundle.inputs.verificationRuns.map((run) => ({\n\t\t\t\t\tname: run.name,\n\t\t\t\t\tstatus: run.status,\n\t\t\t\t\texitCode: run.exitCode,\n\t\t\t\t\tdurationMs: run.durationMs,\n\t\t\t\t})),\n\t\t\t},\n\t\t});\n\t\tawait emit({\n\t\t\tphase: \"judge\",\n\t\t\tlevel: \"info\",\n\t\t\tsource: \"evaluator\",\n\t\t\tmessage: \"Starting judge evaluation.\",\n\t\t\tpayload: { judge: params.judge },\n\t\t});\n\t\tconst judged = await this.judgeProjectValue({\n\t\t\tproject,\n\t\t\tbundle,\n\t\t\tpreviousEvaluation,\n\t\t\tjudge: params.judge,\n\t\t\temitActivity: emit,\n\t\t});\n\t\tawait emit({\n\t\t\tphase: \"save\",\n\t\t\tlevel: \"info\",\n\t\t\tsource: \"evaluator\",\n\t\t\tmessage: \"Saving evaluation and generated improvement requests.\",\n\t\t});\n\t\tconst run = await this.evaluations.createEvaluationRun({\n\t\t\tbundle,\n\t\t\tevaluation: judged.evaluation,\n\t\t\trawOutput: judged.rawOutput,\n\t\t\timprovements: generateImprovementRequests(judged.evaluation),\n\t\t\tactivityEvents,\n\t\t});\n\t\tconst persistedActivityCount = run.activityEvents.length;\n\t\tawait emit({\n\t\t\tphase: \"complete\",\n\t\t\tlevel: \"checkpoint\",\n\t\t\tsource: \"evaluator\",\n\t\t\tmessage: `Evaluation complete: ${run.evaluation.score} / ${run.evaluation.idealScore}.`,\n\t\t\tpayload: {\n\t\t\t\tevaluationId: run.evaluation.id,\n\t\t\t\tscore: run.evaluation.score,\n\t\t\t\tconfidence: run.evaluation.overallConfidence,\n\t\t\t},\n\t\t});\n\t\tconst pendingActivityEvents = activityEvents.slice(persistedActivityCount);\n\t\tawait this.evaluations.createActivityEvents(\n\t\t\trun.evaluation.id,\n\t\t\tpendingActivityEvents,\n\t\t);\n\t\treturn { ...run, judgeRun: judged.judgeRun, activityEvents };\n\t}\n\n\tasync createBundle(params: {\n\t\tprojectId: string;\n\t\tprojectRoot?: string;\n\t}): Promise<EvaluationBundle> {\n\t\tconst project = await this.projects.get(params.projectId);\n\t\tconst previousEvaluation = await this.evaluations.findLatestEvaluation(\n\t\t\tproject.id,\n\t\t);\n\t\tconst bundle = await buildEvaluationBundle({\n\t\t\tproject,\n\t\t\tprojectRoot: params.projectRoot,\n\t\t\tpreviousEvaluation,\n\t\t});\n\t\treturn this.evaluations.createBundle(bundle);\n\t}\n\n\tasync getLatestEvaluation(\n\t\tprojectId: string,\n\t): Promise<ProjectValueEvaluation> {\n\t\tconst evaluation = await this.evaluations.findLatestEvaluation(projectId);\n\t\tif (!evaluation) {\n\t\t\tthrow new HttpError(404, \"Evaluation not found.\");\n\t\t}\n\t\treturn evaluation;\n\t}\n\n\tasync listProjectEvaluations(\n\t\tprojectId: string,\n\t): Promise<ProjectValueEvaluation[]> {\n\t\tawait this.projects.get(projectId);\n\t\treturn this.evaluations.findEvaluationsByProjectId(projectId);\n\t}\n\n\tasync getEvaluation(evaluationId: string): Promise<ProjectValueEvaluation> {\n\t\tconst evaluation = await this.evaluations.findEvaluationById(evaluationId);\n\t\tif (!evaluation) {\n\t\t\tthrow new HttpError(404, \"Evaluation not found.\");\n\t\t}\n\t\treturn evaluation;\n\t}\n\n\tasync getActivityEvents(\n\t\tevaluationId: string,\n\t): Promise<EvaluationActivityEvent[]> {\n\t\tconst evaluation = await this.evaluations.findEvaluationById(evaluationId);\n\t\tif (!evaluation) {\n\t\t\tthrow new HttpError(404, \"Evaluation not found.\");\n\t\t}\n\t\treturn this.evaluations.findActivityEventsByEvaluationId(evaluationId);\n\t}\n\n\tasync getImprovements(evaluationId: string) {\n\t\tconst evaluation = await this.evaluations.findEvaluationById(evaluationId);\n\t\tif (!evaluation) {\n\t\t\tthrow new HttpError(404, \"Evaluation not found.\");\n\t\t}\n\t\treturn this.evaluations.findImprovementsByEvaluationId(evaluationId);\n\t}\n}\n",
+          "truncated": false
+        },
+        {
+          "path": "api/modules/evaluations/improvement-generator.ts",
+          "role": "core-logic",
+          "checkIds": [
+            "domain-logic",
+            "data-persistence",
+            "agent-output-contract"
+          ],
+          "reason": "Project Ideal に関わる中核ロジックと業務判断を確認するため。",
+          "content": "import { randomUUID } from \"node:crypto\";\nimport {\n\timprovementRequestSchema,\n\ttype Gap,\n\ttype ImprovementRequest,\n\ttype ProjectValueEvaluation,\n} from \"../../../shared/schemas/evaluation.schema\";\n\nfunction taskTypeForGap(gap: Gap): ImprovementRequest[\"taskType\"] {\n\tif (gap.kind === \"documentation-gap\") return \"docs\";\n\tif (gap.kind === \"runtime-gap\" || gap.kind === \"evidence-gap\") {\n\t\treturn \"evidence\";\n\t}\n\tif (gap.affectedDimensions.includes(\"security\")) return \"security\";\n\tif (gap.affectedDimensions.includes(\"agentUsability\")) {\n\t\treturn \"agent-usability\";\n\t}\n\treturn \"feature\";\n}\n\nfunction verificationForGap(gap: Gap): string[] {\n\tif (gap.kind === \"documentation-gap\") {\n\t\treturn [\"bun run typecheck\", \"bun run format:check\"];\n\t}\n\tif (gap.kind === \"runtime-gap\" || gap.kind === \"evidence-gap\") {\n\t\treturn [\"bun run verify\"];\n\t}\n\treturn [\"bun run typecheck\", \"bun run test\"];\n}\n\nfunction promptForGap(gap: Gap): string {\n\treturn [\n\t\t`次のギャップが検出されています: ${gap.title}。`,\n\t\t`理由: ${gap.rationale}`,\n\t\t`影響する評価軸: ${gap.affectedDimensions.join(\"、\")}。`,\n\t\t\"このギャップを閉じる最小の変更を実装し、その後に検証コマンドを実行してください。\",\n\t].join(\"\\n\");\n}\n\nexport function generateImprovementRequests(\n\tevaluation: ProjectValueEvaluation,\n): ImprovementRequest[] {\n\treturn evaluation.gapsTo100\n\t\t.slice()\n\t\t.sort((a, b) => {\n\t\t\tconst aGain = a.expectedScoreGain + a.expectedConfidenceGain * 20;\n\t\t\tconst bGain = b.expectedScoreGain + b.expectedConfidenceGain * 20;\n\t\t\treturn bGain - aGain;\n\t\t})\n\t\t.slice(0, 6)\n\t\t.map((gap, index) =>\n\t\t\timprovementRequestSchema.parse({\n\t\t\t\tid: randomUUID(),\n\t\t\t\tevaluationId: evaluation.id,\n\t\t\t\ttitle: gap.title,\n\t\t\t\treason: gap.rationale,\n\t\t\t\tsourceGapIds: [gap.id],\n\t\t\t\tsourceDimensionKeys: gap.affectedDimensions,\n\t\t\t\texpectedScoreGain: gap.expectedScoreGain,\n\t\t\t\texpectedConfidenceGain: gap.expectedConfidenceGain,\n\t\t\t\tcomplexity: gap.kind === \"runtime-gap\" ? 1 : 2,\n\t\t\t\tpriority: index + 1,\n\t\t\t\ttaskType: taskTypeForGap(gap),\n\t\t\t\tprompt: promptForGap(gap),\n\t\t\t\tacceptanceCriteria: [\n\t\t\t\t\t\"ギャップが最小かつレビューしやすい変更で解消されている。\",\n\t\t\t\t\t\"次回評価で改善を検出できるように、根拠が追加または更新されている。\",\n\t\t\t\t\t\"検証コマンドが成功している、または失敗理由が記録されている。\",\n\t\t\t\t],\n\t\t\t\tverificationCommands: verificationForGap(gap),\n\t\t\t\tcreatedAt: new Date().toISOString(),\n\t\t\t}),\n\t\t);\n}\n",
+          "truncated": false
+        },
+        {
+          "path": "api/app/server.ts",
+          "role": "interface-boundary",
+          "checkIds": [
+            "entrypoint-flow",
+            "external-boundary",
+            "agent-output-contract"
+          ],
+          "reason": "外部入力を受け取り対象ワークフローへ渡す境界を確認するため。",
+          "content": "import app, { getAppRuntime } from \"./hono\";\nimport { readAppEnv } from \"./env\";\n\nconst env = readAppEnv();\n\nconst server = Bun.serve({\n\tfetch: app.fetch,\n\thostname: env.host,\n\tport: env.port,\n});\n\nconsole.log(\n\t`ProjectValueEvaluator server listening on http://${env.host}:${server.port}`,\n);\n\nconst shutdown = async (signal: string) => {\n\tconsole.log(`\\nReceived ${signal}. Shutting down gracefully...`);\n\tserver.stop(true);\n\n\ttry {\n\t\tconst runtime = await getAppRuntime();\n\t\tif (runtime?.dbConnection?.ownsConnection) {\n\t\t\tconsole.log(\"Closing database connection...\");\n\t\t\truntime.dbConnection.client.close();\n\t\t}\n\t\tconsole.log(\"Shutdown complete.\");\n\t\tprocess.exit(0);\n\t} catch (error) {\n\t\tconsole.error(\"Error during shutdown:\", error);\n\t\tprocess.exit(1);\n\t}\n};\n\nprocess.on(\"SIGINT\", () => shutdown(\"SIGINT\"));\nprocess.on(\"SIGTERM\", () => shutdown(\"SIGTERM\"));\n",
+          "truncated": false
+        },
+        {
+          "path": "api/cli/bundle.ts",
+          "role": "interface-boundary",
+          "checkIds": [
+            "entrypoint-flow",
+            "external-boundary",
+            "agent-output-contract"
+          ],
+          "reason": "外部入力を受け取り対象ワークフローへ渡す境界を確認するため。",
+          "content": "import {\n\tfindOrCreateCliProject,\n\tparseEvaluatorArgs,\n\tprintBundle,\n\trunEvaluatorCli,\n\twithEvaluatorServices,\n} from \"./evaluator-runtime\";\n\nawait runEvaluatorCli(async () => {\n\tconst args = parseEvaluatorArgs(Bun.argv.slice(2));\n\tawait withEvaluatorServices(async ({ projectService, evaluationService }) => {\n\t\tconst project = await findOrCreateCliProject(projectService, args);\n\t\tconst bundle = await evaluationService.createBundle({\n\t\t\tprojectId: project.id,\n\t\t\tprojectRoot: args.project,\n\t\t});\n\t\tprintBundle(bundle, args.json);\n\t});\n});\n",
+          "truncated": false
+        },
+        {
+          "path": "api/cli/evaluate.ts",
+          "role": "interface-boundary",
+          "checkIds": [
+            "entrypoint-flow",
+            "external-boundary",
+            "agent-output-contract"
+          ],
+          "reason": "外部入力を受け取り対象ワークフローへ渡す境界を確認するため。",
+          "content": "import {\n\tfindOrCreateCliProject,\n\tparseEvaluatorArgs,\n\tprintEvaluation,\n\trunEvaluatorCli,\n\twithEvaluatorServices,\n} from \"./evaluator-runtime\";\n\nawait runEvaluatorCli(async () => {\n\tconst args = parseEvaluatorArgs(Bun.argv.slice(2));\n\tawait withEvaluatorServices(async ({ projectService, evaluationService }) => {\n\t\tconst project = await findOrCreateCliProject(projectService, args);\n\t\tconst result = await evaluationService.evaluateProject({\n\t\t\tprojectId: project.id,\n\t\t\tprojectRoot: args.project,\n\t\t\tjudge: args.judge,\n\t\t});\n\t\tprintEvaluation(result, args.json);\n\t});\n});\n",
+          "truncated": false
+        },
+        {
+          "path": "api/cli/migrate.ts",
+          "role": "interface-boundary",
+          "checkIds": [
+            "entrypoint-flow",
+            "external-boundary",
+            "agent-output-contract"
+          ],
+          "reason": "外部入力を受け取り対象ワークフローへ渡す境界を確認するため。",
+          "content": "import { readdir, readFile } from \"node:fs/promises\";\nimport path from \"node:path\";\nimport { Database } from \"bun:sqlite\";\nimport { readAppEnv } from \"../app/env\";\n\ntype MigrationRecord = {\n\tfilename: string;\n\tapplied_at: string;\n};\n\nconst MIGRATIONS_TABLE = \"hono_standard_schema_migrations\";\n\nasync function listSqlMigrations(dir: string): Promise<string[]> {\n\tconst entries = await readdir(dir, { withFileTypes: true });\n\treturn entries\n\t\t.filter((entry) => entry.isFile() && entry.name.endsWith(\".sql\"))\n\t\t.map((entry) => entry.name)\n\t\t.sort((a, b) => a.localeCompare(b));\n}\n\nasync function ensureMigrationsTable(client: Database): Promise<void> {\n\tclient.run(`\n\t\tCREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (\n\t\t\tfilename text PRIMARY KEY,\n\t\t\tapplied_at text NOT NULL DEFAULT CURRENT_TIMESTAMP\n\t\t)\n\t`);\n}\n\nasync function appliedMigrations(client: Database): Promise<Set<string>> {\n\tconst rows = client\n\t\t.query(`SELECT filename, applied_at FROM ${MIGRATIONS_TABLE}`)\n\t\t.all() as MigrationRecord[];\n\treturn new Set(rows.map((row) => row.filename));\n}\n\nasync function applyMigrationFile(\n\tclient: Database,\n\tmigrationsDir: string,\n\tfilename: string,\n): Promise<void> {\n\tconst fullPath = path.resolve(migrationsDir, filename);\n\tconst sqlText = await readFile(fullPath, \"utf8\");\n\tclient.run(\"BEGIN\");\n\ttry {\n\t\tclient.run(sqlText);\n\t\tclient\n\t\t\t.query(`INSERT INTO ${MIGRATIONS_TABLE} (filename) VALUES (?)`)\n\t\t\t.run(filename);\n\t\tclient.run(\"COMMIT\");\n\t} catch (error) {\n\t\tclient.run(\"ROLLBACK\");\n\t\tthrow error;\n\t}\n}\n\nasync function main() {\n\tconst env = readAppEnv();\n\tconst client = new Database(env.databaseUrl, { create: true });\n\tconst migrationsDir = path.resolve(process.cwd(), \"drizzle\");\n\n\ttry {\n\t\tawait ensureMigrationsTable(client);\n\t\tconst allMigrations = await listSqlMigrations(migrationsDir);\n\t\tconst applied = await appliedMigrations(client);\n\t\tconst pending = allMigrations.filter((filename) => !applied.has(filename));\n\n\t\tfor (const filename of pending) {\n\t\t\tawait applyMigrationFile(client, migrationsDir, filename);\n\t\t\tconsole.log(`applied: ${filename}`);\n\t\t}\n\n\t\tconsole.log(\n\t\t\tJSON.stringify(\n\t\t\t\t{\n\t\t\t\t\tok: true,\n\t\t\t\t\ttotal: allMigrations.length,\n\t\t\t\t\tapplied: pending.length,\n\t\t\t\t\tskipped: allMigrations.length - pending.length,\n\t\t\t\t},\n\t\t\t\tnull,\n\t\t\t\t2,\n\t\t\t),\n\t\t);\n\t} finally {\n\t\tclient.close();\n\t}\n}\n\nawait main();\n",
+          "truncated": false
+        },
+        {
+          "path": "api/db/index.ts",
+          "role": "data-model",
+          "checkIds": [
+            "domain-logic",
+            "data-persistence",
+            "agent-output-contract"
+          ],
+          "reason": "対象ワークフローの状態、データ構造、保存形式の契約を確認するため。",
+          "content": "import { mkdirSync } from \"node:fs\";\nimport path from \"node:path\";\nimport { Database } from \"bun:sqlite\";\nimport type { BunSQLiteDatabase } from \"drizzle-orm/bun-sqlite\";\nimport { drizzle } from \"drizzle-orm/bun-sqlite\";\n\nimport * as schema from \"./schema\";\n\nexport type DbConnection = {\n\tclient: Database;\n\tdb: BunSQLiteDatabase<typeof schema>;\n\t/** このパッケージが接続を所有しているか（close責任があるか） */\n\townsConnection: boolean;\n};\n\n/**\n * databasePath から新しい SQLite database を作成してDrizzleでラップする\n * 接続の所有権はこのパッケージに帰属する\n */\nexport function createDbConnection(databasePath: string): DbConnection {\n\tif (/^[a-z][a-z0-9+.-]*:\\/\\//i.test(databasePath)) {\n\t\tthrow new Error(\n\t\t\t\"DATABASE_URL must be a SQLite file path. Network database URLs are not supported by the SQLite adapter.\",\n\t\t);\n\t}\n\tif (databasePath !== \":memory:\") {\n\t\tmkdirSync(path.dirname(path.resolve(databasePath)), { recursive: true });\n\t}\n\tconst client = new Database(databasePath, { create: true });\n\tconst db = drizzle(client, { schema });\n\treturn { client, db, ownsConnection: true };\n}\n\n/**\n * 外部の SQLite database をDrizzleでラップする\n * 接続の所有権はホスト側に帰属（closeしない）\n */\nexport function wrapExternalClient(client: Database): DbConnection {\n\tconst db = drizzle(client, { schema });\n\treturn { client, db, ownsConnection: false };\n}\n\n/**\n * 接続を確立する\n */\nexport async function connectDb(client: Database) {\n\tclient.query(\"SELECT 1\").get();\n}\n\nexport { schema };\n",
+          "truncated": false
+        },
+        {
+          "path": "api/db/schema.ts",
+          "role": "data-model",
+          "checkIds": [
+            "domain-logic",
+            "data-persistence",
+            "agent-output-contract"
+          ],
+          "reason": "対象ワークフローの状態、データ構造、保存形式の契約を確認するため。",
+          "content": "import { randomUUID } from \"node:crypto\";\nimport {\n\tindex,\n\tinteger,\n\tsqliteTable,\n\ttext,\n\tuniqueIndex,\n} from \"drizzle-orm/sqlite-core\";\n\nexport const users = sqliteTable(\n\t\"users\",\n\t{\n\t\tid: text(\"id\")\n\t\t\t.primaryKey()\n\t\t\t.$defaultFn(() => randomUUID()),\n\t\temail: text(\"email\").notNull().unique(),\n\t\tpasswordHash: text(\"password_hash\").notNull(),\n\t\tdisplayName: text(\"display_name\").notNull(),\n\t\trole: text(\"role\").notNull().default(\"member\"),\n\t\tisActive: integer(\"is_active\", { mode: \"boolean\" }).notNull().default(true),\n\t\tlastLoginAt: integer(\"last_login_at\", { mode: \"timestamp\" }),\n\t\tcreatedAt: integer(\"created_at\", { mode: \"timestamp\" })\n\t\t\t.$defaultFn(() => new Date())\n\t\t\t.notNull(),\n\t\tupdatedAt: integer(\"updated_at\", { mode: \"timestamp\" })\n\t\t\t.$defaultFn(() => new Date())\n\t\t\t.notNull(),\n\t},\n\t(table) => ({\n\t\temailIdx: uniqueIndex(\"users_email_idx\").on(table.email),\n\t\troleIdx: index(\"users_role_idx\").on(table.role),\n\t\tisActiveIdx: index(\"users_is_active_idx\").on(table.isActive),\n\t}),\n);\n\nexport const refreshTokens = sqliteTable(\n\t\"refresh_tokens\",\n\t{\n\t\tid: text(\"id\")\n\t\t\t.primaryKey()\n\t\t\t.$defaultFn(() => randomUUID()),\n\t\ttoken: text(\"token\").notNull().unique(),\n\t\tuserId: text(\"user_id\")\n\t\t\t.notNull()\n\t\t\t.references(() => users.id, { onDelete: \"cascade\" }),\n\t\texpiresAt: integer(\"expires_at\", { mode: \"timestamp\" }).notNull(),\n\t\tcreatedAt: integer(\"created_at\", { mode: \"timestamp\" })\n\t\t\t.$defaultFn(() => new Date())\n\t\t\t.notNull(),\n\t},\n\t(table) => ({\n\t\ttokenIdx: uniqueIndex(\"refresh_tokens_token_idx\").on(table.token),\n\t\tuserIdIdx: index(\"refresh_tokens_user_id_idx\").on(table.userId),\n\t\texpiresAtIdx: index(\"refresh_tokens_expires_at_idx\").on(table.expiresAt),\n\t}),\n);\n\nexport const projectProfiles = sqliteTable(\n\t\"project_profiles\",\n\t{\n\t\tid: text(\"id\")\n\t\t\t.primaryKey()\n\t\t\t.$defaultFn(() => randomUUID()),\n\t\tname: text(\"name\").notNull(),\n\t\trootPath: text(\"root_path\").notNull(),\n\t\tideal: text(\"ideal\").notNull(),\n\t\tprimaryAudience: text(\"primary_audience\").notNull(),\n\t\ttargetWorkflow: text(\"target_workflow\").notNull(),\n\t\tnonGoalsJson: text(\"non_goals_json\").notNull().default(\"[]\"),\n\t\tdimensionsJson: text(\"dimensions_json\").notNull().default(\"[]\"),\n\t\tcreatedAt: integer(\"created_at\", { mode: \"timestamp\" })\n\t\t\t.$defaultFn(() => new Date())\n\t\t\t.notNull(),\n\t\tupdatedAt: integer(\"updated_at\", { mode: \"timestamp\" })\n\t\t\t.$defaultFn(() => new Date())\n\t\t\t.notNull(),\n\t\tdeletedAt: integer(\"deleted_at\", { mode: \"timestamp\" }),\n\t},\n\t(table) => ({\n\t\tnameIdx: index(\"project_profiles_name_idx\").on(table.name),\n\t\trootPathIdx: index(\"project_profiles_root_path_idx\").on(table.rootPath),\n\t\tdeletedAtIdx: index(\"project_profiles_deleted_at_idx\").on(table.deletedAt),\n\t}),\n);\n\nexport const evaluationBundles = sqliteTable(\n\t\"evaluation_bundles\",\n\t{\n\t\tid: text(\"id\")\n\t\t\t.primaryKey()\n\t\t\t.$defaultFn(() => randomUUID()),\n\t\tprojectId: text(\"project_id\")\n\t\t\t.notNull()\n\t\t\t.references(() => projectProfiles.id, { onDelete: \"cascade\" }),\n\t\tevidenceLevel: text(\"evidence_level\").notNull(),\n\t\tprojectRoot: text(\"project_root\").notNull(),\n\t\tinputsJson: text(\"inputs_json\").notNull(),\n\t\tinspectedInputsJson: text(\"inspected_inputs_json\").notNull(),\n\t\tmissingInputsJson: text(\"missing_inputs_json\").notNull(),\n\t\tnotVerifiedJson: text(\"not_verified_json\").notNull(),\n\t\tcreatedAt: integer(\"created_at\", { mode: \"timestamp\" })\n\t\t\t.$defaultFn(() => new Date())\n\t\t\t.notNull(),\n\t},\n\t(table) => ({\n\t\tprojectIdIdx: index(\"evaluation_bundles_project_id_idx\").on(\n\t\t\ttable.projectId,\n\t\t),\n\t\tcreatedAtIdx: index(\"evaluation_bundles_created_at_idx\").on(\n\t\t\ttable.createdAt,\n\t\t),\n\t}),\n);\n\nexport const projectEvaluations = sqliteTable(\n\t\"project_evaluations\",\n\t{\n\t\tid: text(\"id\")\n\t\t\t.primaryKey()\n\t\t\t.$defaultFn(() => randomUUID()),\n\t\tprojectId: text(\"project_id\")\n\t\t\t.notNull()\n\t\t\t.references(() => projectProfiles.id, { onDelete: \"cascade\" }),\n\t\tbundleId: text(\"bundle_id\")\n\t\t\t.notNull()\n\t\t\t.references(() => evaluationBundles.id, { onDelete: \"cascade\" }),\n\t\tscore: integer(\"score\").notNull(),\n\t\tidealScore: integer(\"ideal_score\").notNull().default(100),\n\t\toverallConfidence: integer(\"overall_confidence\").notNull(),\n\t\tevidenceLevel: text(\"evidence_level\").notNull(),\n\t\tsummary: text(\"summary\").notNull(),\n\t\tdimensionsJson: text(\"dimensions_json\").notNull(),\n\t\tstrengthsJson: text(\"strengths_json\").notNull(),\n\t\tgapsTo100Json: text(\"gaps_to_100_json\").notNull(),\n\t\tsourceInspectionsJson: text(\"source_inspections_json\")\n\t\t\t.notNull()\n\t\t\t.default(\"[]\"),\n\t\tnotVerifiedJson: text(\"not_verified_json\").notNull(),\n\t\tnextEvidenceToCollectJson: text(\"next_evidence_to_collect_json\")\n\t\t\t.notNull()\n\t\t\t.default(\"[]\"),\n\t\tpreviousScore: integer(\"previous_score\"),\n\t\tscoreDelta: integer(\"score_delta\"),\n\t\tpreviousConfidence: integer(\"previous_confidence\"),\n\t\tconfidenceDelta: integer(\"confidence_delta\"),\n\t\trawOutputJson: text(\"raw_output_json\").notNull().default(\"{}\"),\n\t\tcreatedAt: integer(\"created_at\", { mode: \"timestamp\" })\n\t\t\t.$defaultFn(() => new Date())\n\t\t\t.notNull(),\n\t},\n\t(table) => ({\n\t\tprojectIdIdx: index(\"project_evaluations_project_id_idx\").on(\n\t\t\ttable.projectId,\n\t\t),\n\t\tbundleIdIdx: index(\"project_evaluations_bundle_id_idx\").on(table.bundleId),\n\t\tcreatedAtIdx: index(\"project_evaluations_created_at_idx\").on(\n\t\t\ttable.createdAt,\n\t\t),\n\t}),\n);\n\nexport const improvementRequests = sqliteTable(\n\t\"improvement_requests\",\n\t{\n\t\tid: text(\"id\")\n\t\t\t.primaryKey()\n\t\t\t.$defaultFn(() => randomUUID()),\n\t\tevaluationId: text(\"evaluation_id\")\n\t\t\t.notNull()\n\t\t\t.references(() => projectEvaluations.id, { onDelete: \"cascade\" }),\n\t\ttitle: text(\"title\").notNull(),\n\t\treason: text(\"reason\").notNull(),\n\t\tsourceGapIdsJson: text(\"source_gap_ids_json\").notNull(),\n\t\tsourceDimensionKeysJson: text(\"source_dimension_keys_json\").notNull(),\n\t\texpectedScoreGain: integer(\"expected_score_gain\").notNull(),\n\t\texpectedConfidenceGain: integer(\"expected_confidence_gain\").notNull(),\n\t\tcomplexity: integer(\"complexity\").notNull(),\n\t\tpriority: integer(\"priority\").notNull(),\n\t\ttaskType: text(\"task_type\").notNull(),\n\t\tprompt: text(\"prompt\").notNull(),\n\t\tacceptanceCriteriaJson: text(\"acceptance_criteria_json\").notNull(),\n\t\tverificationCommandsJson: text(\"verification_commands_json\").notNull(),\n\t\tcreatedAt: integer(\"created_at\", { mode: \"timestamp\" })\n\t\t\t.$defaultFn(() => new Date())\n\t\t\t.notNull(),\n\t},\n\t(table) => ({\n\t\tevaluationIdIdx: index(\"improvement_requests_evaluation_id_idx\").on(\n\t\t\ttable.evaluationId,\n\t\t),\n\t\tpriorityIdx: index(\"improvement_requests_priority_idx\").on(table.priority),\n\t}),\n);\n\nexport const evaluationActivityEvents = sqliteTable(\n\t\"evaluation_activity_events\",\n\t{\n\t\tid: text(\"id\")\n\t\t\t.primaryKey()\n\t\t\t.$defaultFn(() => randomUUID()),\n\t\tevaluationId: text(\"evaluation_id\")\n\t\t\t.notNull()\n\t\t\t.references(() => projectEvaluations.id, { onDelete: \"cascade\" }),\n\t\tseq: integer(\"seq\").notNull(),\n\t\tphase: text(\"phase\").notNull(),\n\t\tlevel: text(\"level\").notNull(),\n\t\tsource: text(\"source\").notNull(),\n\t\tmessage: text(\"message\").notNull(),\n\t\tstatus: text(\"status\"),\n\t\tpayloadJson: text(\"payload_json\"),\n\t\tcreatedAt: integer(\"created_at\", { mode: \"timestamp\" })\n\t\t\t.$defaultFn(() => new Date())\n\t\t\t.notNull(),\n\t},\n\t(table) => ({\n\t\tevaluationIdIdx: index(\"evaluation_activity_events_evaluation_id_idx\").on(\n\t\t\ttable.evaluationId,\n\t\t),\n\t\tevaluationSeqIdx: uniqueIndex(\n\t\t\t\"evaluation_activity_events_evaluation_seq_idx\",\n\t\t).on(table.evaluationId, table.seq),\n\t}),\n);\n",
+          "truncated": false
+        },
+        {
+          "path": "api/modules/evaluations/evaluation.repository.ts",
+          "role": "data-model",
+          "checkIds": [
+            "domain-logic",
+            "data-persistence",
+            "agent-output-contract"
+          ],
+          "reason": "対象ワークフローの状態、データ構造、保存形式の契約を確認するため。",
+          "content": "import { asc, desc, eq } from \"drizzle-orm\";\nimport type { BunSQLiteDatabase } from \"drizzle-orm/bun-sqlite\";\nimport {\n\tevaluationActivityEventSchema,\n\tevaluationBundleSchema,\n\timprovementRequestSchema,\n\tprojectValueEvaluationSchema,\n\ttype EvaluationActivityEvent,\n\ttype EvaluationBundle,\n\ttype ImprovementRequest,\n\ttype ProjectValueEvaluation,\n} from \"../../../shared/schemas/evaluation.schema\";\nimport {\n\tevaluationActivityEvents,\n\tevaluationBundles,\n\timprovementRequests,\n\tprojectEvaluations,\n} from \"../../db/schema\";\nimport type * as schema from \"../../db/schema\";\nimport {\n\tconfidenceToStored,\n\tratioDeltaToStored,\n\tstoredToConfidence,\n\tstoredToRatioDelta,\n} from \"./score-utils\";\n\nconst parseJson = <T>(value: string): T => JSON.parse(value) as T;\nconst toIso = (value: Date): string => value.toISOString();\n\nfunction toEvaluationBundle(\n\trow: typeof evaluationBundles.$inferSelect,\n): EvaluationBundle {\n\treturn evaluationBundleSchema.parse({\n\t\tid: row.id,\n\t\tprojectId: row.projectId,\n\t\tevidenceLevel: row.evidenceLevel,\n\t\tprojectRoot: row.projectRoot,\n\t\tinputs: parseJson(row.inputsJson),\n\t\tinspectedInputs: parseJson(row.inspectedInputsJson),\n\t\tmissingInputs: parseJson(row.missingInputsJson),\n\t\tnotVerified: parseJson(row.notVerifiedJson),\n\t\tcreatedAt: toIso(row.createdAt),\n\t});\n}\n\nfunction toProjectValueEvaluation(\n\trow: typeof projectEvaluations.$inferSelect,\n): ProjectValueEvaluation {\n\tconst previousConfidence =\n\t\trow.previousConfidence === null\n\t\t\t? undefined\n\t\t\t: storedToConfidence(row.previousConfidence);\n\treturn projectValueEvaluationSchema.parse({\n\t\tid: row.id,\n\t\tprojectId: row.projectId,\n\t\tbundleId: row.bundleId,\n\t\tscore: row.score,\n\t\tidealScore: row.idealScore,\n\t\toverallConfidence: storedToConfidence(row.overallConfidence),\n\t\tevidenceLevel: row.evidenceLevel,\n\t\tsummary: row.summary,\n\t\tdimensions: parseJson(row.dimensionsJson),\n\t\tstrengths: parseJson(row.strengthsJson),\n\t\tgapsTo100: parseJson(row.gapsTo100Json),\n\t\tsourceInspections: parseJson(row.sourceInspectionsJson),\n\t\tnotVerified: parseJson(row.notVerifiedJson),\n\t\tnextEvidenceToCollect: parseJson(row.nextEvidenceToCollectJson),\n\t\tpreviousScore: row.previousScore ?? undefined,\n\t\tscoreDelta: row.scoreDelta ?? undefined,\n\t\tpreviousConfidence,\n\t\tconfidenceDelta:\n\t\t\trow.confidenceDelta === null\n\t\t\t\t? undefined\n\t\t\t\t: storedToRatioDelta(row.confidenceDelta),\n\t\tcreatedAt: toIso(row.createdAt),\n\t});\n}\n\nfunction toImprovementRequest(\n\trow: typeof improvementRequests.$inferSelect,\n): ImprovementRequest {\n\treturn improvementRequestSchema.parse({\n\t\tid: row.id,\n\t\tevaluationId: row.evaluationId,\n\t\ttitle: row.title,\n\t\treason: row.reason,\n\t\tsourceGapIds: parseJson(row.sourceGapIdsJson),\n\t\tsourceDimensionKeys: parseJson(row.sourceDimensionKeysJson),\n\t\texpectedScoreGain: row.expectedScoreGain,\n\t\texpectedConfidenceGain: storedToConfidence(row.expectedConfidenceGain),\n\t\tcomplexity: row.complexity,\n\t\tpriority: row.priority,\n\t\ttaskType: row.taskType,\n\t\tprompt: row.prompt,\n\t\tacceptanceCriteria: parseJson(row.acceptanceCriteriaJson),\n\t\tverificationCommands: parseJson(row.verificationCommandsJson),\n\t\tcreatedAt: toIso(row.createdAt),\n\t});\n}\n\nfunction toEvaluationActivityEvent(\n\trow: typeof evaluationActivityEvents.$inferSelect,\n): EvaluationActivityEvent {\n\treturn evaluationActivityEventSchema.parse({\n\t\tid: row.id,\n\t\tseq: row.seq,\n\t\tphase: row.phase,\n\t\tlevel: row.level,\n\t\tsource: row.source,\n\t\tmessage: row.message,\n\t\tstatus: row.status ?? undefined,\n\t\tpayload:\n\t\t\trow.payloadJson === null\n\t\t\t\t? undefined\n\t\t\t\t: parseJson<unknown>(row.payloadJson),\n\t\tcreatedAt: toIso(row.createdAt),\n\t});\n}\n\nexport class EvaluationRepository {\n\tconstructor(private readonly db: BunSQLiteDatabase<typeof schema>) {}\n\n\tasync createBundle(bundle: EvaluationBundle): Promise<EvaluationBundle> {\n\t\tconst [row] = await this.db\n\t\t\t.insert(evaluationBundles)\n\t\t\t.values({\n\t\t\t\tid: bundle.id,\n\t\t\t\tprojectId: bundle.projectId,\n\t\t\t\tevidenceLevel: bundle.evidenceLevel,\n\t\t\t\tprojectRoot: bundle.projectRoot,\n\t\t\t\tinputsJson: JSON.stringify(bundle.inputs),\n\t\t\t\tinspectedInputsJson: JSON.stringify(bundle.inspectedInputs),\n\t\t\t\tmissingInputsJson: JSON.stringify(bundle.missingInputs),\n\t\t\t\tnotVerifiedJson: JSON.stringify(bundle.notVerified),\n\t\t\t\tcreatedAt: new Date(bundle.createdAt),\n\t\t\t})\n\t\t\t.returning();\n\t\treturn toEvaluationBundle(row);\n\t}\n\n\tasync createEvaluation(\n\t\tevaluation: ProjectValueEvaluation,\n\t\trawOutput: unknown,\n\t): Promise<ProjectValueEvaluation> {\n\t\tconst [row] = await this.db\n\t\t\t.insert(projectEvaluations)\n\t\t\t.values({\n\t\t\t\tid: evaluation.id,\n\t\t\t\tprojectId: evaluation.projectId,\n\t\t\t\tbundleId: evaluation.bundleId,\n\t\t\t\tscore: evaluation.score,\n\t\t\t\tidealScore: evaluation.idealScore,\n\t\t\t\toverallConfidence: confidenceToStored(evaluation.overallConfidence),\n\t\t\t\tevidenceLevel: evaluation.evidenceLevel,\n\t\t\t\tsummary: evaluation.summary,\n\t\t\t\tdimensionsJson: JSON.stringify(evaluation.dimensions),\n\t\t\t\tstrengthsJson: JSON.stringify(evaluation.strengths),\n\t\t\t\tgapsTo100Json: JSON.stringify(evaluation.gapsTo100),\n\t\t\t\tsourceInspectionsJson: JSON.stringify(evaluation.sourceInspections),\n\t\t\t\tnotVerifiedJson: JSON.stringify(evaluation.notVerified),\n\t\t\t\tnextEvidenceToCollectJson: JSON.stringify(\n\t\t\t\t\tevaluation.nextEvidenceToCollect,\n\t\t\t\t),\n\t\t\t\tpreviousScore: evaluation.previousScore,\n\t\t\t\tscoreDelta: evaluation.scoreDelta,\n\t\t\t\tpreviousConfidence:\n\t\t\t\t\tevaluation.previousConfidence === undefined\n\t\t\t\t\t\t? undefined\n\t\t\t\t\t\t: confidenceToStored(evaluation.previousConfidence),\n\t\t\t\tconfidenceDelta:\n\t\t\t\t\tevaluation.confidenceDelta === undefined\n\t\t\t\t\t\t? undefined\n\t\t\t\t\t\t: ratioDeltaToStored(evaluation.confidenceDelta),\n\t\t\t\trawOutputJson: JSON.stringify(rawOutput),\n\t\t\t\tcreatedAt: new Date(evaluation.createdAt),\n\t\t\t})\n\t\t\t.returning();\n\t\treturn toProjectValueEvaluation(row);\n\t}\n\n\tasync createImprovements(\n\t\timprovements: ImprovementRequest[],\n\t): Promise<ImprovementRequest[]> {\n\t\tif (improvements.length === 0) return [];\n\t\tconst rows = await this.db\n\t\t\t.insert(improvementRequests)\n\t\t\t.values(\n\t\t\t\timprovements.map((improvement) => ({\n\t\t\t\t\tid: improvement.id,\n\t\t\t\t\tevaluationId: improvement.evaluationId,\n\t\t\t\t\ttitle: improvement.title,\n\t\t\t\t\treason: improvement.reason,\n\t\t\t\t\tsourceGapIdsJson: JSON.stringify(improvement.sourceGapIds),\n\t\t\t\t\tsourceDimensionKeysJson: JSON.stringify(\n\t\t\t\t\t\timprovement.sourceDimensionKeys,\n\t\t\t\t\t),\n\t\t\t\t\texpectedScoreGain: improvement.expectedScoreGain,\n\t\t\t\t\texpectedConfidenceGain: confidenceToStored(\n\t\t\t\t\t\timprovement.expectedConfidenceGain,\n\t\t\t\t\t),\n\t\t\t\t\tcomplexity: improvement.complexity,\n\t\t\t\t\tpriority: improvement.priority,\n\t\t\t\t\ttaskType: improvement.taskType,\n\t\t\t\t\tprompt: improvement.prompt,\n\t\t\t\t\tacceptanceCriteriaJson: JSON.stringify(\n\t\t\t\t\t\timprovement.acceptanceCriteria,\n\t\t\t\t\t),\n\t\t\t\t\tverificationCommandsJson: JSON.stringify(\n\t\t\t\t\t\timprovement.verificationCommands,\n\t\t\t\t\t),\n\t\t\t\t\tcreatedAt: new Date(improvement.createdAt),\n\t\t\t\t})),\n\t\t\t)\n\t\t\t.returning();\n\t\treturn rows.map(toImprovementRequest);\n\t}\n\n\tasync createActivityEvents(\n\t\tevaluationId: string,\n\t\tactivityEvents: EvaluationActivityEvent[],\n\t): Promise<EvaluationActivityEvent[]> {\n\t\tif (activityEvents.length === 0) return [];\n\t\tconst rows = await this.db\n\t\t\t.insert(evaluationActivityEvents)\n\t\t\t.values(\n\t\t\t\tactivityEvents.map((event) => ({\n\t\t\t\t\tid: event.id,\n\t\t\t\t\tevaluationId,\n\t\t\t\t\tseq: event.seq,\n\t\t\t\t\tphase: event.phase,\n\t\t\t\t\tlevel: event.level,\n\t\t\t\t\tsource: event.source,\n\t\t\t\t\tmessage: event.message,\n\t\t\t\t\tstatus: event.status,\n\t\t\t\t\tpayloadJson:\n\t\t\t\t\t\tevent.payload === undefined ? null : JSON.stringify(event.payload),\n\t\t\t\t\tcreatedAt: new Date(event.createdAt),\n\t\t\t\t})),\n\t\t\t)\n\t\t\t.returning();\n\t\treturn rows.map(toEvaluationActivityEvent);\n\t}\n\n\tasync createEvaluationRun(params: {\n\t\tbundle: EvaluationBundle;\n\t\tevaluation: ProjectValueEvaluation;\n\t\trawOutput: unknown;\n\t\timprovements: ImprovementRequest[];\n\t\tactivityEvents?: EvaluationActivityEvent[];\n\t}): Promise<{\n\t\tbundle: EvaluationBundle;\n\t\tevaluation: ProjectValueEvaluation;\n\t\timprovements: ImprovementRequest[];\n\t\tactivityEvents: EvaluationActivityEvent[];\n\t}> {\n\t\treturn this.db.transaction((tx) => {\n\t\t\tconst bundleRow = tx\n\t\t\t\t.insert(evaluationBundles)\n\t\t\t\t.values({\n\t\t\t\t\tid: params.bundle.id,\n\t\t\t\t\tprojectId: params.bundle.projectId,\n\t\t\t\t\tevidenceLevel: params.bundle.evidenceLevel,\n\t\t\t\t\tprojectRoot: params.bundle.projectRoot,\n\t\t\t\t\tinputsJson: JSON.stringify(params.bundle.inputs),\n\t\t\t\t\tinspectedInputsJson: JSON.stringify(params.bundle.inspectedInputs),\n\t\t\t\t\tmissingInputsJson: JSON.stringify(params.bundle.missingInputs),\n\t\t\t\t\tnotVerifiedJson: JSON.stringify(params.bundle.notVerified),\n\t\t\t\t\tcreatedAt: new Date(params.bundle.createdAt),\n\t\t\t\t})\n\t\t\t\t.returning()\n\t\t\t\t.get();\n\t\t\tconst evaluationRow = tx\n\t\t\t\t.insert(projectEvaluations)\n\t\t\t\t.values({\n\t\t\t\t\tid: params.evaluation.id,\n\t\t\t\t\tprojectId: params.evaluation.projectId,\n\t\t\t\t\tbundleId: params.evaluation.bundleId,\n\t\t\t\t\tscore: params.evaluation.score,\n\t\t\t\t\tidealScore: params.evaluation.idealScore,\n\t\t\t\t\toverallConfidence: confidenceToStored(\n\t\t\t\t\t\tparams.evaluation.overallConfidence,\n\t\t\t\t\t),\n\t\t\t\t\tevidenceLevel: params.evaluation.evidenceLevel,\n\t\t\t\t\tsummary: params.evaluation.summary,\n\t\t\t\t\tdimensionsJson: JSON.stringify(params.evaluation.dimensions),\n\t\t\t\t\tstrengthsJson: JSON.stringify(params.evaluation.strengths),\n\t\t\t\t\tgapsTo100Json: JSON.stringify(params.evaluation.gapsTo100),\n\t\t\t\t\tsourceInspectionsJson: JSON.stringify(\n\t\t\t\t\t\tparams.evaluation.sourceInspections,\n\t\t\t\t\t),\n\t\t\t\t\tnotVerifiedJson: JSON.stringify(params.evaluation.notVerified),\n\t\t\t\t\tnextEvidenceToCollectJson: JSON.stringify(\n\t\t\t\t\t\tparams.evaluation.nextEvidenceToCollect,\n\t\t\t\t\t),\n\t\t\t\t\tpreviousScore: params.evaluation.previousScore,\n\t\t\t\t\tscoreDelta: params.evaluation.scoreDelta,\n\t\t\t\t\tpreviousConfidence:\n\t\t\t\t\t\tparams.evaluation.previousConfidence === undefined\n\t\t\t\t\t\t\t? undefined\n\t\t\t\t\t\t\t: confidenceToStored(params.evaluation.previousConfidence),\n\t\t\t\t\tconfidenceDelta:\n\t\t\t\t\t\tparams.evaluation.confidenceDelta === undefined\n\t\t\t\t\t\t\t? undefined\n\t\t\t\t\t\t\t: ratioDeltaToStored(params.evaluation.confidenceDelta),\n\t\t\t\t\trawOutputJson: JSON.stringify(params.rawOutput),\n\t\t\t\t\tcreatedAt: new Date(params.evaluation.createdAt),\n\t\t\t\t})\n\t\t\t\t.returning()\n\t\t\t\t.get();\n\t\t\tconst improvementRows =\n\t\t\t\tparams.improvements.length === 0\n\t\t\t\t\t? []\n\t\t\t\t\t: tx\n\t\t\t\t\t\t\t.insert(improvementRequests)\n\t\t\t\t\t\t\t.values(\n\t\t\t\t\t\t\t\tparams.improvements.map((improvement) => ({\n\t\t\t\t\t\t\t\t\tid: improvement.id,\n\t\t\t\t\t\t\t\t\tevaluationId: improvement.evaluationId,\n\t\t\t\t\t\t\t\t\ttitle: improvement.title,\n\t\t\t\t\t\t\t\t\treason: improvement.reason,\n\t\t\t\t\t\t\t\t\tsourceGapIdsJson: JSON.stringify(improvement.sourceGapIds),\n\t\t\t\t\t\t\t\t\tsourceDimensionKeysJson: JSON.stringify(\n\t\t\t\t\t\t\t\t\t\timprovement.sourceDimensionKeys,\n\t\t\t\t\t\t\t\t\t),\n\t\t\t\t\t\t\t\t\texpectedScoreGain: improvement.expectedScoreGain,\n\t\t\t\t\t\t\t\t\texpectedConfidenceGain: confidenceToStored(\n\t\t\t\t\t\t\t\t\t\timprovement.expectedConfidenceGain,\n\t\t\t\t\t\t\t\t\t),\n\t\t\t\t\t\t\t\t\tcomplexity: improvement.complexity,\n\t\t\t\t\t\t\t\t\tpriority: improvement.priority,\n\t\t\t\t\t\t\t\t\ttaskType: improvement.taskType,\n\t\t\t\t\t\t\t\t\tprompt: improvement.prompt,\n\t\t\t\t\t\t\t\t\tacceptanceCriteriaJson: JSON.stringify(\n\t\t\t\t\t\t\t\t\t\timprovement.acceptanceCriteria,\n\t\t\t\t\t\t\t\t\t),\n\t\t\t\t\t\t\t\t\tverificationCommandsJson: JSON.stringify(\n\t\t\t\t\t\t\t\t\t\timprovement.verificationCommands,\n\t\t\t\t\t\t\t\t\t),\n\t\t\t\t\t\t\t\t\tcreatedAt: new Date(improvement.createdAt),\n\t\t\t\t\t\t\t\t})),\n\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\t.returning()\n\t\t\t\t\t\t\t.all();\n\t\t\tconst activityRows =\n\t\t\t\tparams.activityEvents?.length === 0 || !params.activityEvents\n\t\t\t\t\t? []\n\t\t\t\t\t: tx\n\t\t\t\t\t\t\t.insert(evaluationActivityEvents)\n\t\t\t\t\t\t\t.values(\n\t\t\t\t\t\t\t\tparams.activityEvents.map((event) => ({\n\t\t\t\t\t\t\t\t\tid: event.id,\n\t\t\t\t\t\t\t\t\tevaluationId: params.evaluation.id,\n\t\t\t\t\t\t\t\t\tseq: event.seq,\n\t\t\t\t\t\t\t\t\tphase: event.phase,\n\t\t\t\t\t\t\t\t\tlevel: event.level,\n\t\t\t\t\t\t\t\t\tsource: event.source,\n\t\t\t\t\t\t\t\t\tmessage: event.message,\n\t\t\t\t\t\t\t\t\tstatus: event.status,\n\t\t\t\t\t\t\t\t\tpayloadJson:\n\t\t\t\t\t\t\t\t\t\tevent.payload === undefined\n\t\t\t\t\t\t\t\t\t\t\t? null\n\t\t\t\t\t\t\t\t\t\t\t: JSON.stringify(event.payload),\n\t\t\t\t\t\t\t\t\tcreatedAt: new Date(event.createdAt),\n\t\t\t\t\t\t\t\t})),\n\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\t.returning()\n\t\t\t\t\t\t\t.all();\n\t\t\treturn {\n\t\t\t\tbundle: toEvaluationBundle(bundleRow),\n\t\t\t\tevaluation: toProjectValueEvaluation(evaluationRow),\n\t\t\t\timprovements: improvementRows.map(toImprovementRequest),\n\t\t\t\tactivityEvents: activityRows.map(toEvaluationActivityEvent),\n\t\t\t};\n\t\t});\n\t}\n\n\tasync findLatestEvaluation(\n\t\tprojectId: string,\n\t): Promise<ProjectValueEvaluation | null> {\n\t\tconst row = await this.db.query.projectEvaluations.findFirst({\n\t\t\twhere: eq(projectEvaluations.projectId, projectId),\n\t\t\torderBy: [desc(projectEvaluations.createdAt)],\n\t\t});\n\t\treturn row ? toProjectValueEvaluation(row) : null;\n\t}\n\n\tasync findEvaluationsByProjectId(\n\t\tprojectId: string,\n\t): Promise<ProjectValueEvaluation[]> {\n\t\tconst rows = await this.db.query.projectEvaluations.findMany({\n\t\t\twhere: eq(projectEvaluations.projectId, projectId),\n\t\t\torderBy: [desc(projectEvaluations.createdAt)],\n\t\t});\n\t\treturn rows.map(toProjectValueEvaluation);\n\t}\n\n\tasync findEvaluationById(\n\t\tevaluationId: string,\n\t): Promise<ProjectValueEvaluation | null> {\n\t\tconst row = await this.db.query.projectEvaluations.findFirst({\n\t\t\twhere: eq(projectEvaluations.id, evaluationId),\n\t\t});\n\t\treturn row ? toProjectValueEvaluation(row) : null;\n\t}\n\n\tasync findActivityEventsByEvaluationId(\n\t\tevaluationId: string,\n\t): Promise<EvaluationActivityEvent[]> {\n\t\tconst rows = await this.db.query.evaluationActivityEvents.findMany({\n\t\t\twhere: eq(evaluationActivityEvents.evaluationId, evaluationId),\n\t\t\torderBy: [asc(evaluationActivityEvents.seq)],\n\t\t});\n\t\treturn rows.map(toEvaluationActivityEvent);\n\t}\n\n\tasync findImprovementsByEvaluationId(\n\t\tevaluationId: string,\n\t): Promise<ImprovementRequest[]> {\n\t\tconst rows = await this.db.query.improvementRequests.findMany({\n\t\t\twhere: eq(improvementRequests.evaluationId, evaluationId),\n\t\t\torderBy: [asc(improvementRequests.priority)],\n\t\t});\n\t\treturn rows.map(toImprovementRequest);\n\t}\n}\n",
+          "truncated": false
+        },
+        {
+          "path": "api/modules/projects/project.repository.ts",
+          "role": "data-model",
+          "checkIds": [
+            "domain-logic",
+            "data-persistence",
+            "agent-output-contract"
+          ],
+          "reason": "対象ワークフローの状態、データ構造、保存形式の契約を確認するため。",
+          "content": "import { and, desc, eq, isNull } from \"drizzle-orm\";\nimport type { BunSQLiteDatabase } from \"drizzle-orm/bun-sqlite\";\nimport {\n\tprojectProfileSchema,\n\ttype ProjectProfile,\n\ttype ProjectProfileCreate,\n} from \"../../../shared/schemas/project.schema\";\nimport { projectProfiles } from \"../../db/schema\";\nimport type * as schema from \"../../db/schema\";\n\nconst parseJsonArray = (value: string): string[] => {\n\tconst parsed = JSON.parse(value) as unknown;\n\treturn Array.isArray(parsed) ? parsed.map(String) : [];\n};\n\nconst toIso = (value: Date): string => value.toISOString();\n\nfunction toProjectProfile(\n\trow: typeof projectProfiles.$inferSelect,\n): ProjectProfile {\n\treturn projectProfileSchema.parse({\n\t\tid: row.id,\n\t\tname: row.name,\n\t\trootPath: row.rootPath,\n\t\tideal: row.ideal,\n\t\tprimaryAudience: row.primaryAudience,\n\t\ttargetWorkflow: row.targetWorkflow,\n\t\tnonGoals: parseJsonArray(row.nonGoalsJson),\n\t\tdimensions: parseJsonArray(row.dimensionsJson),\n\t\tcreatedAt: toIso(row.createdAt),\n\t\tupdatedAt: toIso(row.updatedAt),\n\t});\n}\n\nexport class ProjectRepository {\n\tconstructor(private readonly db: BunSQLiteDatabase<typeof schema>) {}\n\n\tasync create(input: ProjectProfileCreate): Promise<ProjectProfile> {\n\t\tconst now = new Date();\n\t\tconst [row] = await this.db\n\t\t\t.insert(projectProfiles)\n\t\t\t.values({\n\t\t\t\tname: input.name,\n\t\t\t\trootPath: input.rootPath,\n\t\t\t\tideal: input.ideal,\n\t\t\t\tprimaryAudience: input.primaryAudience,\n\t\t\t\ttargetWorkflow: input.targetWorkflow,\n\t\t\t\tnonGoalsJson: JSON.stringify(input.nonGoals),\n\t\t\t\tdimensionsJson: JSON.stringify(input.dimensions),\n\t\t\t\tcreatedAt: now,\n\t\t\t\tupdatedAt: now,\n\t\t\t})\n\t\t\t.returning();\n\t\treturn toProjectProfile(row);\n\t}\n\n\tasync update(\n\t\tid: string,\n\t\tinput: ProjectProfileCreate,\n\t): Promise<ProjectProfile | null> {\n\t\tconst now = new Date();\n\t\tconst [row] = await this.db\n\t\t\t.update(projectProfiles)\n\t\t\t.set({\n\t\t\t\tname: input.name,\n\t\t\t\trootPath: input.rootPath,\n\t\t\t\tideal: input.ideal,\n\t\t\t\tprimaryAudience: input.primaryAudience,\n\t\t\t\ttargetWorkflow: input.targetWorkflow,\n\t\t\t\tnonGoalsJson: JSON.stringify(input.nonGoals),\n\t\t\t\tdimensionsJson: JSON.stringify(input.dimensions),\n\t\t\t\tupdatedAt: now,\n\t\t\t})\n\t\t\t.where(and(eq(projectProfiles.id, id), isNull(projectProfiles.deletedAt)))\n\t\t\t.returning();\n\t\treturn row ? toProjectProfile(row) : null;\n\t}\n\n\tasync findById(id: string): Promise<ProjectProfile | null> {\n\t\tconst row = await this.db.query.projectProfiles.findFirst({\n\t\t\twhere: and(eq(projectProfiles.id, id), isNull(projectProfiles.deletedAt)),\n\t\t});\n\t\treturn row ? toProjectProfile(row) : null;\n\t}\n\n\tasync list(): Promise<ProjectProfile[]> {\n\t\tconst rows = await this.db.query.projectProfiles.findMany({\n\t\t\twhere: isNull(projectProfiles.deletedAt),\n\t\t\torderBy: [desc(projectProfiles.updatedAt)],\n\t\t});\n\t\treturn rows.map(toProjectProfile);\n\t}\n\n\tasync findByRootPath(rootPath: string): Promise<ProjectProfile | null> {\n\t\tconst row = await this.db.query.projectProfiles.findFirst({\n\t\t\twhere: and(\n\t\t\t\teq(projectProfiles.rootPath, rootPath),\n\t\t\t\tisNull(projectProfiles.deletedAt),\n\t\t\t),\n\t\t});\n\t\treturn row ? toProjectProfile(row) : null;\n\t}\n\n\tasync softDelete(id: string): Promise<ProjectProfile | null> {\n\t\tconst now = new Date();\n\t\tconst [row] = await this.db\n\t\t\t.update(projectProfiles)\n\t\t\t.set({\n\t\t\t\tdeletedAt: now,\n\t\t\t\tupdatedAt: now,\n\t\t\t})\n\t\t\t.where(and(eq(projectProfiles.id, id), isNull(projectProfiles.deletedAt)))\n\t\t\t.returning();\n\t\treturn row ? toProjectProfile(row) : null;\n\t}\n}\n",
+          "truncated": false
+        },
+        {
+          "path": "api/cli/auth-create-admin.ts",
+          "role": "external-boundary",
+          "checkIds": [
+            "external-boundary"
+          ],
+          "reason": "LLM、Codex、認証、外部コマンドなどの境界と失敗時挙動を確認するため。",
+          "content": "import { createInterface } from \"node:readline/promises\";\nimport { stdin as input, stdout as output } from \"node:process\";\nimport { readAppEnv } from \"../app/env\";\nimport { createDbConnection } from \"../db\";\nimport { AuthService } from \"../modules/auth/auth.service\";\n\ntype CliArgs = {\n\temail?: string;\n\tname?: string;\n\tpassword?: string;\n\tpasswordFromStdin: boolean;\n};\n\nfunction parseArgs(argv: string[]): CliArgs {\n\tconst args: CliArgs = { passwordFromStdin: false };\n\tfor (let i = 0; i < argv.length; i += 1) {\n\t\tconst token = argv[i];\n\t\tif (token === \"--email\") {\n\t\t\targs.email = argv[i + 1];\n\t\t\ti += 1;\n\t\t\tcontinue;\n\t\t}\n\t\tif (token === \"--name\") {\n\t\t\targs.name = argv[i + 1];\n\t\t\ti += 1;\n\t\t\tcontinue;\n\t\t}\n\t\tif (token === \"--password\") {\n\t\t\targs.password = argv[i + 1];\n\t\t\ti += 1;\n\t\t\tcontinue;\n\t\t}\n\t\tif (token === \"--password-stdin\") {\n\t\t\targs.passwordFromStdin = true;\n\t\t}\n\t}\n\treturn args;\n}\n\nasync function readPassword(args: CliArgs): Promise<string> {\n\tif (args.password) {\n\t\treturn args.password;\n\t}\n\tif (args.passwordFromStdin) {\n\t\tconst chunks: Buffer[] = [];\n\t\tfor await (const chunk of input) {\n\t\t\tchunks.push(Buffer.from(chunk));\n\t\t}\n\t\treturn Buffer.concat(chunks).toString(\"utf8\").trim();\n\t}\n\n\tconst rl = createInterface({ input, output });\n\ttry {\n\t\treturn (await rl.question(\"Password: \")).trim();\n\t} finally {\n\t\trl.close();\n\t}\n}\n\nasync function main() {\n\tconst args = parseArgs(process.argv.slice(2));\n\tif (!args.email || !args.name) {\n\t\tthrow new Error(\"--email and --name are required.\");\n\t}\n\tconst password = await readPassword(args);\n\tif (password.length < 8) {\n\t\tthrow new Error(\"Password must be at least 8 characters.\");\n\t}\n\n\tconst env = readAppEnv();\n\tconst db = createDbConnection(env.databaseUrl);\n\ttry {\n\t\tconst authService = new AuthService(db.db, env);\n\t\tconst user = await authService.createAdmin({\n\t\t\temail: args.email,\n\t\t\tdisplayName: args.name,\n\t\t\tpassword,\n\t\t});\n\t\tconsole.log(\n\t\t\tJSON.stringify(\n\t\t\t\t{\n\t\t\t\t\tok: true,\n\t\t\t\t\tuser: {\n\t\t\t\t\t\tid: user.id,\n\t\t\t\t\t\temail: user.email,\n\t\t\t\t\t\tdisplayName: user.displayName,\n\t\t\t\t\t\trole: user.role,\n\t\t\t\t\t},\n\t\t\t\t},\n\t\t\t\tnull,\n\t\t\t\t2,\n\t\t\t),\n\t\t);\n\t} finally {\n\t\tif (db.ownsConnection) {\n\t\t\tdb.client.close();\n\t\t}\n\t}\n}\n\nawait main();\n",
+          "truncated": false
+        },
+        {
+          "path": "api/middleware/auth.ts",
+          "role": "external-boundary",
+          "checkIds": [
+            "external-boundary"
+          ],
+          "reason": "LLM、Codex、認証、外部コマンドなどの境界と失敗時挙動を確認するため。",
+          "content": "import { getCookie } from \"hono/cookie\";\nimport { createMiddleware } from \"hono/factory\";\nimport type { AppEnv } from \"../app/env\";\nimport { ACCESS_TOKEN_COOKIE_NAME } from \"../modules/auth/auth-cookies\";\nimport { verifyAccessToken } from \"../modules/auth/token.service\";\nimport { HttpError } from \"../modules/auth/errors\";\nimport type { AuthService } from \"../modules/auth/auth.service\";\n\ntype AuthMiddlewareDeps = {\n\tenv: AppEnv;\n\tauthService: AuthService;\n};\n\nconst unauthorized = new HttpError(401, \"Unauthorized\");\n\nconst resolveToken = (\n\tauthorizationHeader: string | undefined,\n\tcookieToken?: string,\n) => {\n\tif (authorizationHeader?.startsWith(\"Bearer \")) {\n\t\treturn authorizationHeader.slice(\"Bearer \".length).trim();\n\t}\n\treturn cookieToken ?? null;\n};\n\nexport const requireAuth = (deps: AuthMiddlewareDeps) =>\n\tcreateMiddleware(async (c, next) => {\n\t\tconst token = resolveToken(\n\t\t\tc.req.header(\"Authorization\"),\n\t\t\tgetCookie(c, ACCESS_TOKEN_COOKIE_NAME),\n\t\t);\n\t\tif (!token) {\n\t\t\tthrow unauthorized;\n\t\t}\n\n\t\tconst payload = await verifyAccessToken(token, deps.env).catch(() => {\n\t\t\tthrow unauthorized;\n\t\t});\n\t\tconst user = await deps.authService.findUserById(payload.userId);\n\t\tif (!user?.isActive) {\n\t\t\tthrow unauthorized;\n\t\t}\n\n\t\tc.set(\"authUser\", {\n\t\t\tuserId: user.id,\n\t\t\temail: user.email,\n\t\t\trole: user.role,\n\t\t});\n\t\tawait next();\n\t});\n",
+          "truncated": false
+        },
+        {
+          "path": "api/modules/auth/auth-cookies.ts",
+          "role": "external-boundary",
+          "checkIds": [
+            "external-boundary"
+          ],
+          "reason": "LLM、Codex、認証、外部コマンドなどの境界と失敗時挙動を確認するため。",
+          "content": "import type { Context } from \"hono\";\nimport { deleteCookie, setCookie } from \"hono/cookie\";\nimport type { AppEnv } from \"../../app/env\";\n\nexport const ACCESS_TOKEN_COOKIE_NAME = \"access_token\";\nexport const REFRESH_TOKEN_COOKIE_NAME = \"refresh_token\";\n\nconst parseDurationToSeconds = (duration: string): number | undefined => {\n\tconst match = duration.match(/^(\\d+)([smhd])$/i);\n\tif (!match) return undefined;\n\tconst value = Number.parseInt(match[1], 10);\n\tif (!Number.isFinite(value) || value <= 0) return undefined;\n\tconst unit = match[2]?.toLowerCase();\n\tswitch (unit) {\n\t\tcase \"s\":\n\t\t\treturn value;\n\t\tcase \"m\":\n\t\t\treturn value * 60;\n\t\tcase \"h\":\n\t\t\treturn value * 60 * 60;\n\t\tcase \"d\":\n\t\t\treturn value * 60 * 60 * 24;\n\t\tdefault:\n\t\t\treturn undefined;\n\t}\n};\n\nexport const setAuthCookies = (\n\tc: Context,\n\tenv: AppEnv,\n\ttokens: { accessToken: string; refreshToken: string },\n) => {\n\tconst secure = env.secureCookie;\n\tconst accessMaxAge = parseDurationToSeconds(env.jwtAccessExpiresIn);\n\tconst refreshMaxAge = parseDurationToSeconds(env.jwtRefreshExpiresIn);\n\n\tsetCookie(c, ACCESS_TOKEN_COOKIE_NAME, tokens.accessToken, {\n\t\thttpOnly: true,\n\t\tsecure,\n\t\tsameSite: env.cookieSameSite,\n\t\tpath: \"/\",\n\t\t...(accessMaxAge ? { maxAge: accessMaxAge } : {}),\n\t});\n\n\tsetCookie(c, REFRESH_TOKEN_COOKIE_NAME, tokens.refreshToken, {\n\t\thttpOnly: true,\n\t\tsecure,\n\t\tsameSite: env.cookieSameSite,\n\t\tpath: \"/api/auth\",\n\t\t...(refreshMaxAge ? { maxAge: refreshMaxAge } : {}),\n\t});\n};\n\nexport const clearAuthCookies = (c: Context) => {\n\tdeleteCookie(c, ACCESS_TOKEN_COOKIE_NAME, { path: \"/\" });\n\tdeleteCookie(c, REFRESH_TOKEN_COOKIE_NAME, { path: \"/api/auth\" });\n};\n",
+          "truncated": false
+        },
+        {
+          "path": "api/modules/auth/auth.service.ts",
+          "role": "external-boundary",
+          "checkIds": [
+            "external-boundary"
+          ],
+          "reason": "LLM、Codex、認証、外部コマンドなどの境界と失敗時挙動を確認するため。",
+          "content": "import { eq } from \"drizzle-orm\";\nimport type { BunSQLiteDatabase } from \"drizzle-orm/bun-sqlite\";\nimport type { AppEnv } from \"../../app/env\";\nimport { users } from \"../../db/schema\";\nimport type * as schema from \"../../db/schema\";\nimport { HttpError } from \"./errors\";\nimport { hashPassword, verifyPassword } from \"./password\";\nimport {\n\tconsumeRefreshToken,\n\tgenerateAccessToken,\n\tgenerateRefreshToken,\n\trevokeRefreshToken,\n} from \"./token.service\";\nimport {\n\tuserRoleSchema,\n\ttype AuthSessionUser,\n\ttype AuthUser,\n\ttype UserRole,\n} from \"./types\";\n\ntype AuthTokensResult = {\n\taccessToken: string;\n\trefreshToken: string;\n\tuser: AuthSessionUser;\n};\n\ntype CreateUserInput = {\n\temail: string;\n\tdisplayName: string;\n\tpassword: string;\n\trole?: UserRole;\n};\n\nconst normalizeRole = (role: string): UserRole => {\n\tconst parsed = userRoleSchema.safeParse(role);\n\treturn parsed.success ? parsed.data : \"member\";\n};\n\nconst toAuthUser = (row: typeof users.$inferSelect): AuthUser => ({\n\tid: row.id,\n\temail: row.email,\n\tpasswordHash: row.passwordHash,\n\tdisplayName: row.displayName,\n\trole: normalizeRole(row.role),\n\tisActive: row.isActive,\n\tlastLoginAt: row.lastLoginAt,\n\tcreatedAt: row.createdAt,\n\tupdatedAt: row.updatedAt,\n});\n\nconst toSessionUser = (user: AuthUser): AuthSessionUser => ({\n\tid: user.id,\n\temail: user.email,\n\tdisplayName: user.displayName,\n\trole: user.role,\n});\n\nexport class AuthService {\n\tconstructor(\n\t\tprivate readonly db: BunSQLiteDatabase<typeof schema>,\n\t\tprivate readonly env: AppEnv,\n\t) {}\n\n\tasync findUserById(userId: string): Promise<AuthUser | null> {\n\t\tconst row = await this.db.query.users.findFirst({\n\t\t\twhere: eq(users.id, userId),\n\t\t});\n\t\treturn row ? toAuthUser(row) : null;\n\t}\n\n\tasync findUserByEmail(email: string): Promise<AuthUser | null> {\n\t\tconst row = await this.db.query.users.findFirst({\n\t\t\twhere: eq(users.email, email.toLowerCase()),\n\t\t});\n\t\treturn row ? toAuthUser(row) : null;\n\t}\n\n\tprivate async issueTokens(user: AuthUser): Promise<AuthTokensResult> {\n\t\tconst accessToken = await generateAccessToken(\n\t\t\t{\n\t\t\t\tuserId: user.id,\n\t\t\t\temail: user.email,\n\t\t\t\trole: user.role,\n\t\t\t},\n\t\t\tthis.env,\n\t\t);\n\t\tconst refreshToken = await generateRefreshToken(\n\t\t\t{\n\t\t\t\tuserId: user.id,\n\t\t\t\temail: user.email,\n\t\t\t\trole: user.role,\n\t\t\t},\n\t\t\tthis.db,\n\t\t\tthis.env,\n\t\t);\n\t\treturn {\n\t\t\taccessToken,\n\t\t\trefreshToken,\n\t\t\tuser: toSessionUser(user),\n\t\t};\n\t}\n\n\tasync login(params: {\n\t\temail: string;\n\t\tpassword: string;\n\t}): Promise<AuthTokensResult> {\n\t\tconst user = await this.findUserByEmail(params.email);\n\t\tif (!user?.isActive) {\n\t\t\tthrow new HttpError(401, \"Invalid email or password.\");\n\t\t}\n\t\tconst valid = await verifyPassword(params.password, user.passwordHash);\n\t\tif (!valid) {\n\t\t\tthrow new HttpError(401, \"Invalid email or password.\");\n\t\t}\n\t\tconst now = new Date();\n\t\tawait this.db\n\t\t\t.update(users)\n\t\t\t.set({ lastLoginAt: now, updatedAt: now })\n\t\t\t.where(eq(users.id, user.id));\n\t\tconst refreshed = await this.findUserById(user.id);\n\t\tif (!refreshed) {\n\t\t\tthrow new HttpError(404, \"User not found.\");\n\t\t}\n\t\treturn this.issueTokens(refreshed);\n\t}\n\n\tasync refresh(refreshToken: string): Promise<AuthTokensResult> {\n\t\tconst payload = await consumeRefreshToken(refreshToken, this.db, this.env);\n\t\tconst user = await this.findUserById(payload.userId);\n\t\tif (!user?.isActive) {\n\t\t\tthrow new HttpError(401, \"User account is inactive or deleted.\");\n\t\t}\n\t\treturn this.issueTokens(user);\n\t}\n\n\tasync logout(refreshToken?: string): Promise<void> {\n\t\tif (!refreshToken) return;\n\t\tawait revokeRefreshToken(refreshToken, this.db);\n\t}\n\n\tasync createAdmin(input: Omit<CreateUserInput, \"role\">): Promise<AuthUser> {\n\t\tconst existing = await this.findUserByEmail(input.email);\n\t\tif (existing) {\n\t\t\tthrow new HttpError(409, \"Email already in use.\");\n\t\t}\n\t\tconst passwordHash = await hashPassword(input.password);\n\t\tconst [created] = await this.db\n\t\t\t.insert(users)\n\t\t\t.values({\n\t\t\t\temail: input.email.toLowerCase(),\n\t\t\t\tpasswordHash,\n\t\t\t\tdisplayName: input.displayName,\n\t\t\t\trole: \"admin\",\n\t\t\t\tisActive: true,\n\t\t\t})\n\t\t\t.returning();\n\t\treturn toAuthUser(created);\n\t}\n}\n",
+          "truncated": false
+        },
+        {
+          "path": "web/src/App.tsx",
+          "role": "entrypoint",
+          "checkIds": [
+            "entrypoint-flow",
+            "verification-signal"
+          ],
+          "reason": "実行入口として、対象ワークフローの中核処理へ接続される経路を確認するため。",
+          "content": "import { QueryClient, QueryClientProvider } from \"@tanstack/react-query\";\nimport { RouterProvider } from \"@tanstack/react-router\";\nimport { router } from \"./router\";\nimport { ShowcaseSettingsProvider } from \"./showcase-settings-context\";\n\nconst queryClient = new QueryClient({\n\tdefaultOptions: {\n\t\tqueries: {\n\t\t\tretry: false,\n\t\t},\n\t},\n});\n\nexport function App() {\n\treturn (\n\t\t<QueryClientProvider client={queryClient}>\n\t\t\t<ShowcaseSettingsProvider>\n\t\t\t\t<RouterProvider router={router} />\n\t\t\t</ShowcaseSettingsProvider>\n\t\t</QueryClientProvider>\n\t);\n}\n",
+          "truncated": false
+        },
+        {
+          "path": "web/src/main.tsx",
+          "role": "entrypoint",
+          "checkIds": [
+            "entrypoint-flow",
+            "verification-signal"
+          ],
+          "reason": "実行入口として、対象ワークフローの中核処理へ接続される経路を確認するため。",
+          "content": "import { StrictMode } from \"react\";\nimport { createRoot } from \"react-dom/client\";\nimport { App } from \"./App\";\nimport \"./styles.css\";\n\nconst root = document.getElementById(\"root\");\nif (!root) {\n\tthrow new Error(\"Root element not found\");\n}\n\ncreateRoot(root).render(\n\t<StrictMode>\n\t\t<App />\n\t</StrictMode>,\n);\n",
+          "truncated": false
+        }
+      ],
+      "verificationRuns": [
+        {
+          "name": "verify",
+          "command": [
+            "bun",
+            "run",
+            "verify"
+          ],
+          "status": "passed",
+          "exitCode": 0,
+          "durationMs": 4462,
+          "stdout": "OK typecheck\nOK lint\nOK format\nOK test\nOK build\nOK verify complete\n",
+          "stderr": "$ bun scripts/verify.ts\n"
+        }
+      ]
+    },
+    "inspectedInputs": {
+      "readme": true,
+      "llmContext": true,
+      "agents": false,
+      "packageJson": true,
+      "repoTree": true,
+      "sourceFilesSampled": [
+        "api/cli/evaluator-runtime.ts",
+        "api/modules/evaluations/bundle-builder.ts",
+        "api/modules/evaluations/evaluation.service.ts",
+        "api/modules/evaluations/improvement-generator.ts",
+        "api/app/server.ts",
+        "api/cli/bundle.ts",
+        "api/cli/evaluate.ts",
+        "api/cli/migrate.ts",
+        "api/db/index.ts",
+        "api/db/schema.ts",
+        "api/modules/evaluations/evaluation.repository.ts",
+        "api/modules/projects/project.repository.ts",
+        "api/cli/auth-create-admin.ts",
+        "api/middleware/auth.ts",
+        "api/modules/auth/auth-cookies.ts",
+        "api/modules/auth/auth.service.ts",
+        "web/src/App.tsx",
+        "web/src/main.tsx"
+      ],
+      "testsExecuted": true,
+      "buildExecuted": true,
+      "appLaunched": false,
+      "sampleOutputReviewed": false
+    },
+    "missingInputs": [
+      "AGENTS.md"
+    ],
+    "notVerified": [
+      "ランタイム挙動",
+      "ソースコード全量の監査",
+      "サンプル出力の品質",
+      "監査級のセキュリティ挙動"
+    ],
+    "createdAt": "2026-06-28T05:57:02.000Z"
+  },
+  "evaluation": {
+    "id": "a7e074d4-09ef-43f1-bbb0-b8904001a8d2",
+    "projectId": "50e0289c-3458-4661-b8c4-3a3563175d45",
+    "bundleId": "ad2bc9eb-3731-4823-b590-ecbd74076544",
+    "score": 82,
+    "idealScore": 100,
+    "overallConfidence": 0.82,
+    "evidenceLevel": "runtime-verified",
+    "summary": "ProjectValueEvaluator は、coding agents がプロジェクト価値を評価し、差分と改善候補を保存するための MVP としてかなり実用段階に近い。CLI/API/DB/評価サービス/改善生成/検証パイプラインが接続され、`bun run verify` も成功している。一方で、README/LLM_CONTEXT の Evidence Policy と実装の自動 verify 実行に不整合があり、Codex judge 境界や実際のサンプル出力・UI 操作は今回の bundle では十分確認できていない。",
+    "dimensions": [
+      {
+        "key": "conceptValue",
+        "score": 88,
+        "confidence": 0.88,
+        "rationale": "普段の曖昧な価値評価依頼を、rubric、schema、保存履歴、差分、改善依頼へ固定化する狙いは primaryAudience の coding agents に明確に合っている。",
+        "evidenceRefs": [
+          "README.md",
+          "LLM_CONTEXT.md",
+          "api/modules/evaluations/evaluation.service.ts",
+          "api/modules/evaluations/improvement-generator.ts"
+        ],
+        "caveats": [
+          "実際の利用者が評価結果をどの程度改善実装に使えるかはサンプル出力未確認。"
+        ]
+      },
+      {
+        "key": "implementationCompleteness",
+        "score": 79,
+        "confidence": 0.82,
+        "rationale": "CLI、API、bundle 生成、評価保存、改善依頼生成、SQLite 永続化、verify が揃っており MVP 中核は実装済み。ただし provider adapter の実装詳細と UI 実行確認は今回未確認。",
+        "evidenceRefs": [
+          "api/cli/evaluate.ts",
+          "api/cli/bundle.ts",
+          "api/modules/evaluations/evaluation.service.ts",
+          "api/modules/evaluations/evaluation.repository.ts",
+          "verificationRuns.verify"
+        ],
+        "caveats": [
+          "`api/modules/llm/judge-client.ts` は repoTree にあるが sourceFiles 抜粋では未確認。"
+        ]
+      },
+      {
+        "key": "architectureQuality",
+        "score": 84,
+        "confidence": 0.84,
+        "rationale": "ProjectService、EvaluationService、Repository、shared schemas、CLI/API の分離があり、評価 usecase を中心にした構成は読みやすい。永続化も transaction で束ねられている。",
+        "evidenceRefs": [
+          "api/modules/evaluations/evaluation.service.ts",
+          "api/modules/evaluations/evaluation.repository.ts",
+          "api/db/schema.ts",
+          "shared/schemas/evaluation.schema.ts"
+        ],
+        "caveats": [
+          "bundle-builder が収集、分類、検証実行を多く抱えており、今後 evidence collector 化する余地がある。"
+        ]
+      },
+      {
+        "key": "maintainability",
+        "score": 81,
+        "confidence": 0.8,
+        "rationale": "TypeScript/Zod/Drizzle による境界の明示、verify スクリプト、テスト群の存在により保守しやすい。ただし bundle-builder は責務が広く、README と実装方針の不一致が保守上の混乱要因。",
+        "evidenceRefs": [
+          "api/modules/evaluations/bundle-builder.ts",
+          "api/modules/evaluations/evaluation.service.ts",
+          "api/db/schema.ts",
+          "package.json"
+        ],
+        "caveats": [
+          "sourceFiles はサンプルであり、全量の循環依存や未使用コードは未確認。"
+        ]
+      },
+      {
+        "key": "security",
+        "score": 72,
+        "confidence": 0.7,
+        "rationale": "JWT/cookie/refresh token/認証 middleware があり、SQLite URL を file path に制限するなど基本境界はある。評価ワークフロー固有のパスアクセス、LLM 境界、CLI 入力の監査級確認は不足している。",
+        "evidenceRefs": [
+          "api/middleware/auth.ts",
+          "api/modules/auth/auth-cookies.ts",
+          "api/modules/auth/auth.service.ts",
+          "api/db/index.ts"
+        ],
+        "caveats": [
+          "監査級のセキュリティ挙動は bundle 自身も未検証としている。"
+        ]
+      },
+      {
+        "key": "testability",
+        "score": 87,
+        "confidence": 0.9,
+        "rationale": "`bun run verify` が typecheck/lint/format/test/build を通して成功しており、repoTree に route/service/auth/llm 周辺のテストが多い。",
+        "evidenceRefs": [
+          "verificationRuns.verify",
+          "package.json",
+          "api/modules/evaluations/evaluation.service.test.ts",
+          "api/routes/projects.route.test.ts"
+        ],
+        "caveats": [
+          "テスト内容の網羅性までは抜粋だけでは確認していない。"
+        ]
+      },
+      {
+        "key": "documentation",
+        "score": 80,
+        "confidence": 0.82,
+        "rationale": "README と LLM_CONTEXT は目的、MVP、構成、CLI/API、検証コマンド、non-goals を具体的に説明している。一方で Evidence Policy は実装の verify 実行と食い違っている。",
+        "evidenceRefs": [
+          "README.md",
+          "LLM_CONTEXT.md",
+          "api/modules/evaluations/bundle-builder.ts"
+        ],
+        "caveats": [
+          "AGENTS.md は missingInputs で未提供。"
+        ]
+      },
+      {
+        "key": "agentUsability",
+        "score": 86,
+        "confidence": 0.84,
+        "rationale": "CLI の `--json`、profile 入力、評価結果・source checks・gaps・improvements の出力、改善依頼 prompt 生成があり、coding agents が次作業へ移りやすい。",
+        "evidenceRefs": [
+          "api/cli/evaluator-runtime.ts",
+          "api/cli/evaluate.ts",
+          "api/modules/evaluations/improvement-generator.ts"
+        ],
+        "caveats": [
+          "実際の JSON 出力サンプル品質は未レビュー。"
+        ]
+      },
+      {
+        "key": "extensibility",
+        "score": 80,
+        "confidence": 0.78,
+        "rationale": "JudgeSelection、provider adapter 境界、shared schemas、JSON 保存、dimension/gap ベースの改善生成により拡張余地はある。未実装 provider の扱いは設計上明示されているが、実装詳細は未確認。",
+        "evidenceRefs": [
+          "LLM_CONTEXT.md",
+          "api/modules/evaluations/evaluation.service.ts",
+          "api/modules/evaluations/improvement-generator.ts",
+          "api/db/schema.ts"
+        ],
+        "caveats": [
+          "Codex/OpenAI/Azure/Local LLM adapter の実装差分は確認できていない。"
+        ]
+      },
+      {
+        "key": "reliability",
+        "score": 79,
+        "confidence": 0.82,
+        "rationale": "評価実行は activity event を出し、bundle/evaluation/improvement を transaction で保存し、verify も成功している。失敗時に暗黙 fallback しない方針も良い。ただし appLaunch と sample output は未確認。",
+        "evidenceRefs": [
+          "api/modules/evaluations/evaluation.service.ts",
+          "api/modules/evaluations/evaluation.repository.ts",
+          "api/cli/evaluator-runtime.ts",
+          "verificationRuns.verify"
+        ],
+        "caveats": [
+          "実際の API サーバー起動、CLI 評価完走、judge 失敗時挙動は今回未確認。"
+        ]
+      },
+      {
+        "key": "strategicFit",
+        "score": 89,
+        "confidence": 0.86,
+        "rationale": "projectIdeal、primaryAudience、targetWorkflow に対して、評価、履歴、差分、改善候補生成に集中しており、non-goals も MVP に合っている。",
+        "evidenceRefs": [
+          "README.md",
+          "LLM_CONTEXT.md",
+          "api/modules/evaluations/evaluation.service.ts"
+        ],
+        "caveats": [
+          "Evidence Policy の方針差分を解消しないと、baseline と runtime-verified の位置づけが曖昧になる。"
+        ]
+      },
+      {
+        "key": "ossProductValue",
+        "score": 75,
+        "confidence": 0.74,
+        "rationale": "MIT、README、CLI/API、検証コマンド、ローカル SQLite 構成があり OSS として試せる形に近い。ただし judge 認証、サンプル成果物、導入後の具体例、UI 動作確認の公開証跡が不足している。",
+        "evidenceRefs": [
+          "package.json",
+          "README.md",
+          "api/cli/evaluate.ts",
+          "api/app/server.ts"
+        ],
+        "caveats": [
+          "配布パッケージとしての実運用手順や example evaluation は未確認。"
+        ]
+      }
+    ],
+    "strengths": [
+      "評価 bundle 生成、judge 実行、保存、改善依頼生成までの主経路が `EvaluationService` に集約されている。",
+      "SQLite + Drizzle で profile、bundle、evaluation、improvement、activity events を永続化しており、前回比較や履歴利用の土台がある。",
+      "CLI/API/README/LLM_CONTEXT が揃っており、coding agents が操作しやすいプロジェクト形状になっている。",
+      "`bun run verify` が typecheck/lint/format/test/build を通して成功しており、現時点の検証シグナルが強い。",
+      "改善依頼生成が gap の種類と影響 dimension から taskType、prompt、acceptanceCriteria、verificationCommands に落ちるため、次アクションに接続しやすい。"
+    ],
+    "gapsTo100": [
+      {
+        "id": "2a409880-cf99-43c4-b73b-95a55ca83796",
+        "title": "Evidence Policy と実装の自動 verify 実行の不整合を解消する",
+        "kind": "documentation-gap",
+        "affectedDimensions": [
+          "documentation",
+          "reliability",
+          "agentUsability",
+          "strategicFit"
+        ],
+        "currentEvidenceLevel": "runtime-verified",
+        "expectedScoreGain": 4,
+        "expectedConfidenceGain": 0.05,
+        "rationale": "README/LLM_CONTEXT は baseline 評価で build/test/verify を自動実行しないと説明しているが、bundle-builder は scripts.verify を選択して実行している。価値は高いが、利用者と agent にとって評価の証拠レベルが混乱する。"
+      },
+      {
+        "id": "0a56dee4-94c7-47bf-89b4-4b15c790ef66",
+        "title": "Judge provider 境界の実装証跡を評価 bundle に含める",
+        "kind": "evidence-gap",
+        "affectedDimensions": [
+          "implementationCompleteness",
+          "extensibility",
+          "reliability",
+          "security"
+        ],
+        "currentEvidenceLevel": "runtime-verified",
+        "expectedScoreGain": 5,
+        "expectedConfidenceGain": 0.08,
+        "rationale": "LLM_CONTEXT は Codex-first judge と未実装 adapter の扱いを重視しているが、今回の sourceFiles 抜粋には `api/modules/llm/judge-client.ts` が含まれていない。中核外部境界の確認不足が評価信頼度を下げている。"
+      },
+      {
+        "id": "14a0cf54-a5ed-4a66-82e0-bc7d764e54c4",
+        "title": "CLI/API/UI のサンプル出力を保存してレビュー可能にする",
+        "kind": "runtime-gap",
+        "affectedDimensions": [
+          "agentUsability",
+          "ossProductValue",
+          "reliability",
+          "testability"
+        ],
+        "currentEvidenceLevel": "runtime-verified",
+        "expectedScoreGain": 4,
+        "expectedConfidenceGain": 0.07,
+        "rationale": "verify は成功しているが、bundle の inspectedInputs では appLaunched と sampleOutputReviewed が false。coding agents 向け製品としては、実際の評価 JSON、改善依頼、UI 表示のサンプルが価値判断に必要。"
+      },
+      {
+        "id": "8d03c044-e942-4893-83e6-4be56228d1f2",
+        "title": "評価対象 rootPath とファイルアクセス境界の安全性を確認する",
+        "kind": "evidence-gap",
+        "affectedDimensions": [
+          "security",
+          "reliability"
+        ],
+        "currentEvidenceLevel": "runtime-verified",
+        "expectedScoreGain": 3,
+        "expectedConfidenceGain": 0.05,
+        "rationale": "認証や cookie の基本実装は確認できたが、任意 project path を読む評価サービスとしての path 境界、秘密情報除外、LLM 送信内容の制御は抜粋だけでは十分確認できない。"
+      },
+      {
+        "id": "f1bc6a9b-b642-48dc-b8a3-d931ee85d2c9",
+        "title": "bundle-builder の責務を evidence collector と prompt context builder に分ける",
+        "kind": "implementation-gap",
+        "affectedDimensions": [
+          "architectureQuality",
+          "maintainability",
+          "extensibility"
+        ],
+        "currentEvidenceLevel": "runtime-verified",
+        "expectedScoreGain": 3,
+        "expectedConfidenceGain": 0.04,
+        "rationale": "bundle-builder は tree 収集、source 選定、検証実行、notVerified 構築まで担っている。MVP では成立しているが、今後 runtime verification や audit-grade evidence を追加すると責務が膨らみやすい。"
+      }
+    ],
+    "sourceInspections": [
+      {
+        "checkId": "entrypoint-flow",
+        "title": "主要ワークフローへの実行経路",
+        "status": "passed",
+        "files": [
+          "api/cli/evaluate.ts",
+          "api/cli/bundle.ts",
+          "api/cli/evaluator-runtime.ts",
+          "api/modules/evaluations/evaluation.service.ts",
+          "api/app/server.ts",
+          "web/src/App.tsx",
+          "web/src/main.tsx"
+        ],
+        "findings": [
+          "CLI の evaluate/bundle は共通 runtime から ProjectService と EvaluationService を組み立て、中核 usecase に接続している。",
+          "server entrypoint は Hono app を Bun.serve に渡し、shutdown 時に DB 接続を閉じる経路を持つ。",
+          "React entrypoint は router と query client を構成しているが、評価 UI の詳細画面は今回の sourceFiles 抜粋では確認していない。"
+        ],
+        "evidenceRefs": [
+          "api/cli/evaluate.ts",
+          "api/cli/bundle.ts",
+          "api/cli/evaluator-runtime.ts",
+          "api/modules/evaluations/evaluation.service.ts",
+          "api/app/server.ts",
+          "web/src/App.tsx",
+          "web/src/main.tsx"
+        ]
+      },
+      {
+        "checkId": "domain-logic",
+        "title": "対象プロジェクトの中核ロジック",
+        "status": "passed",
+        "files": [
+          "api/modules/evaluations/bundle-builder.ts",
+          "api/modules/evaluations/evaluation.service.ts",
+          "api/modules/evaluations/improvement-generator.ts",
+          "api/cli/evaluator-runtime.ts"
+        ],
+        "findings": [
+          "EvaluationService が profile 読み込み、前回評価取得、bundle 生成、judge 実行、保存、改善依頼生成を一つの主経路として束ねている。",
+          "improvement-generator は gap を taskType、prompt、acceptanceCriteria、verificationCommands へ変換し、評価から次改善へつなげている。",
+          "bundle-builder は source inspection plan と sourceFiles を構築しているが、README の baseline Evidence Policy と verify 実行の挙動に不整合がある。"
+        ],
+        "evidenceRefs": [
+          "api/modules/evaluations/evaluation.service.ts",
+          "api/modules/evaluations/improvement-generator.ts",
+          "api/modules/evaluations/bundle-builder.ts",
+          "README.md",
+          "LLM_CONTEXT.md"
+        ]
+      },
+      {
+        "checkId": "data-persistence",
+        "title": "状態管理と再現性",
+        "status": "passed",
+        "files": [
+          "api/db/schema.ts",
+          "api/db/index.ts",
+          "api/modules/evaluations/evaluation.repository.ts",
+          "api/modules/projects/project.repository.ts"
+        ],
+        "findings": [
+          "projectProfiles、evaluationBundles、projectEvaluations、improvementRequests、evaluationActivityEvents が schema として定義され、履歴と改善依頼の保存先がある。",
+          "createEvaluationRun は bundle、evaluation、improvements、activity events を transaction で保存している。",
+          "JSON text 保存は MVP として妥当だが、後で横断集計する場合は一部正規化が必要になる。"
+        ],
+        "evidenceRefs": [
+          "api/db/schema.ts",
+          "api/modules/evaluations/evaluation.repository.ts",
+          "api/modules/projects/project.repository.ts",
+          "api/db/index.ts"
+        ]
+      },
+      {
+        "checkId": "external-boundary",
+        "title": "外部境界と失敗時挙動",
+        "status": "partial",
+        "files": [
+          "api/cli/auth-create-admin.ts",
+          "api/middleware/auth.ts",
+          "api/modules/auth/auth-cookies.ts",
+          "api/modules/auth/auth.service.ts",
+          "api/db/index.ts",
+          "api/cli/migrate.ts"
+        ],
+        "findings": [
+          "認証 middleware は Bearer/cookie token を検証し、非 active user を拒否している。",
+          "auth cookie は httpOnly、secure、sameSite、path を設定しており、refresh cookie は `/api/auth` に限定している。",
+          "SQLite 接続は network database URL を拒否する。",
+          "評価の最重要外部境界である Codex/LLM judge client は今回の sourceFiles 抜粋に含まれず、provider 失敗時挙動は部分確認に留まる。"
+        ],
+        "evidenceRefs": [
+          "api/middleware/auth.ts",
+          "api/modules/auth/auth-cookies.ts",
+          "api/modules/auth/auth.service.ts",
+          "api/db/index.ts",
+          "api/cli/migrate.ts"
+        ]
+      },
+      {
+        "checkId": "verification-signal",
+        "title": "検証可能性",
+        "status": "passed",
+        "files": [
+          "web/src/App.tsx",
+          "web/src/main.tsx",
+          "api/cli/evaluator-runtime.ts"
+        ],
+        "findings": [
+          "`bun run verify` が typecheck、lint、format、test、build をすべて成功させている。",
+          "package scripts に個別検証コマンドと verify が定義されている。",
+          "repoTree には service、route、auth、llm 周辺の test files が多数あり、検証文化は強い。"
+        ],
+        "evidenceRefs": [
+          "verificationRuns.verify",
+          "package.json",
+          "repoTree"
+        ]
+      },
+      {
+        "checkId": "agent-output-contract",
+        "title": "利用者へ渡る操作・出力契約",
+        "status": "partial",
+        "files": [
+          "api/cli/evaluator-runtime.ts",
+          "api/modules/evaluations/improvement-generator.ts",
+          "api/modules/evaluations/evaluation.repository.ts",
+          "api/db/schema.ts"
+        ],
+        "findings": [
+          "CLI は JSON 出力と人間向け出力を分け、score、confidence、verification runs、source checks、top gaps、next improvements を表示する。",
+          "改善依頼は gap 由来の prompt、acceptance criteria、verification commands を持ち、coding agents が次タスクへ移りやすい。",
+          "sampleOutputReviewed が false のため、実際の出力が agent にとって十分読みやすいかは未確認。"
+        ],
+        "evidenceRefs": [
+          "api/cli/evaluator-runtime.ts",
+          "api/modules/evaluations/improvement-generator.ts",
+          "api/modules/evaluations/evaluation.repository.ts",
+          "api/db/schema.ts",
+          "inspectedInputs.sampleOutputReviewed"
+        ]
+      }
+    ],
+    "notVerified": [
+      "アプリサーバーを実際に起動して API/UI を操作する確認。",
+      "`api/modules/llm/judge-client.ts` の Codex SDK 境界、未実装 provider の失敗挙動、raw output handling。",
+      "CLI の `evaluator:evaluate --json` と `evaluator:reevaluate --json` の実サンプル出力品質。",
+      "ソースコード全量の監査、特に path 読み取り、秘密情報除外、LLM 送信データ制御。",
+      "監査級のセキュリティ挙動。",
+      "AGENTS.md は missingInputs で未確認。"
+    ],
+    "nextEvidenceToCollect": [
+      "一時 SQLite DB で migration から `evaluator:evaluate --json`、`evaluator:reevaluate --json` まで実行し、成果物 JSON を保存する。",
+      "Hono `app.request` で project 作成、evaluation 実行、latest/improvements 取得の API サンプルを確認する。",
+      "`api/modules/llm/judge-client.ts` とその test を source inspection 対象に追加し、provider 失敗時の出力契約を確認する。",
+      "UI を起動して Home/Settings の評価ワークフローを操作し、スクリーンショットまたは DOM レベルで確認する。",
+      "Evidence Policy を更新するか、baseline 評価で verify を実行しない構成へ分けたうえで、bundle の evidenceLevel と notVerified の意味を再確認する。"
+    ],
+    "createdAt": "2026-06-28T05:59:19.000Z"
+  },
+  "improvements": [
+    {
+      "id": "ca4645df-76f6-4c91-9dc7-befdf50c0667",
+      "evaluationId": "a7e074d4-09ef-43f1-bbb0-b8904001a8d2",
+      "title": "Judge provider 境界の実装証跡を評価 bundle に含める",
+      "reason": "LLM_CONTEXT は Codex-first judge と未実装 adapter の扱いを重視しているが、今回の sourceFiles 抜粋には `api/modules/llm/judge-client.ts` が含まれていない。中核外部境界の確認不足が評価信頼度を下げている。",
+      "sourceGapIds": [
+        "0a56dee4-94c7-47bf-89b4-4b15c790ef66"
+      ],
+      "sourceDimensionKeys": [
+        "implementationCompleteness",
+        "extensibility",
+        "reliability",
+        "security"
+      ],
+      "expectedScoreGain": 5,
+      "expectedConfidenceGain": 0.08,
+      "complexity": 2,
+      "priority": 1,
+      "taskType": "evidence",
+      "prompt": "次のギャップが検出されています: Judge provider 境界の実装証跡を評価 bundle に含める。\n理由: LLM_CONTEXT は Codex-first judge と未実装 adapter の扱いを重視しているが、今回の sourceFiles 抜粋には `api/modules/llm/judge-client.ts` が含まれていない。中核外部境界の確認不足が評価信頼度を下げている。\n影響する評価軸: implementationCompleteness、extensibility、reliability、security。\nこのギャップを閉じる最小の変更を実装し、その後に検証コマンドを実行してください。",
+      "acceptanceCriteria": [
+        "ギャップが最小かつレビューしやすい変更で解消されている。",
+        "次回評価で改善を検出できるように、根拠が追加または更新されている。",
+        "検証コマンドが成功している、または失敗理由が記録されている。"
+      ],
+      "verificationCommands": [
+        "bun run verify"
+      ],
+      "createdAt": "2026-06-28T05:59:19.000Z"
+    },
+    {
+      "id": "6a7c578e-64f3-46aa-8a73-cf38661c0d94",
+      "evaluationId": "a7e074d4-09ef-43f1-bbb0-b8904001a8d2",
+      "title": "CLI/API/UI のサンプル出力を保存してレビュー可能にする",
+      "reason": "verify は成功しているが、bundle の inspectedInputs では appLaunched と sampleOutputReviewed が false。coding agents 向け製品としては、実際の評価 JSON、改善依頼、UI 表示のサンプルが価値判断に必要。",
+      "sourceGapIds": [
+        "14a0cf54-a5ed-4a66-82e0-bc7d764e54c4"
+      ],
+      "sourceDimensionKeys": [
+        "agentUsability",
+        "ossProductValue",
+        "reliability",
+        "testability"
+      ],
+      "expectedScoreGain": 4,
+      "expectedConfidenceGain": 0.07,
+      "complexity": 1,
+      "priority": 2,
+      "taskType": "evidence",
+      "prompt": "次のギャップが検出されています: CLI/API/UI のサンプル出力を保存してレビュー可能にする。\n理由: verify は成功しているが、bundle の inspectedInputs では appLaunched と sampleOutputReviewed が false。coding agents 向け製品としては、実際の評価 JSON、改善依頼、UI 表示のサンプルが価値判断に必要。\n影響する評価軸: agentUsability、ossProductValue、reliability、testability。\nこのギャップを閉じる最小の変更を実装し、その後に検証コマンドを実行してください。",
+      "acceptanceCriteria": [
+        "ギャップが最小かつレビューしやすい変更で解消されている。",
+        "次回評価で改善を検出できるように、根拠が追加または更新されている。",
+        "検証コマンドが成功している、または失敗理由が記録されている。"
+      ],
+      "verificationCommands": [
+        "bun run verify"
+      ],
+      "createdAt": "2026-06-28T05:59:19.000Z"
+    },
+    {
+      "id": "aaf6ef14-6236-48d7-88ac-3e204e47217e",
+      "evaluationId": "a7e074d4-09ef-43f1-bbb0-b8904001a8d2",
+      "title": "Evidence Policy と実装の自動 verify 実行の不整合を解消する",
+      "reason": "README/LLM_CONTEXT は baseline 評価で build/test/verify を自動実行しないと説明しているが、bundle-builder は scripts.verify を選択して実行している。価値は高いが、利用者と agent にとって評価の証拠レベルが混乱する。",
+      "sourceGapIds": [
+        "2a409880-cf99-43c4-b73b-95a55ca83796"
+      ],
+      "sourceDimensionKeys": [
+        "documentation",
+        "reliability",
+        "agentUsability",
+        "strategicFit"
+      ],
+      "expectedScoreGain": 4,
+      "expectedConfidenceGain": 0.05,
+      "complexity": 2,
+      "priority": 3,
+      "taskType": "docs",
+      "prompt": "次のギャップが検出されています: Evidence Policy と実装の自動 verify 実行の不整合を解消する。\n理由: README/LLM_CONTEXT は baseline 評価で build/test/verify を自動実行しないと説明しているが、bundle-builder は scripts.verify を選択して実行している。価値は高いが、利用者と agent にとって評価の証拠レベルが混乱する。\n影響する評価軸: documentation、reliability、agentUsability、strategicFit。\nこのギャップを閉じる最小の変更を実装し、その後に検証コマンドを実行してください。",
+      "acceptanceCriteria": [
+        "ギャップが最小かつレビューしやすい変更で解消されている。",
+        "次回評価で改善を検出できるように、根拠が追加または更新されている。",
+        "検証コマンドが成功している、または失敗理由が記録されている。"
+      ],
+      "verificationCommands": [
+        "bun run typecheck",
+        "bun run format:check"
+      ],
+      "createdAt": "2026-06-28T05:59:19.000Z"
+    },
+    {
+      "id": "ca8feedd-a9bd-437a-a1cf-31f9713ad4b8",
+      "evaluationId": "a7e074d4-09ef-43f1-bbb0-b8904001a8d2",
+      "title": "評価対象 rootPath とファイルアクセス境界の安全性を確認する",
+      "reason": "認証や cookie の基本実装は確認できたが、任意 project path を読む評価サービスとしての path 境界、秘密情報除外、LLM 送信内容の制御は抜粋だけでは十分確認できない。",
+      "sourceGapIds": [
+        "8d03c044-e942-4893-83e6-4be56228d1f2"
+      ],
+      "sourceDimensionKeys": [
+        "security",
+        "reliability"
+      ],
+      "expectedScoreGain": 3,
+      "expectedConfidenceGain": 0.05,
+      "complexity": 2,
+      "priority": 4,
+      "taskType": "evidence",
+      "prompt": "次のギャップが検出されています: 評価対象 rootPath とファイルアクセス境界の安全性を確認する。\n理由: 認証や cookie の基本実装は確認できたが、任意 project path を読む評価サービスとしての path 境界、秘密情報除外、LLM 送信内容の制御は抜粋だけでは十分確認できない。\n影響する評価軸: security、reliability。\nこのギャップを閉じる最小の変更を実装し、その後に検証コマンドを実行してください。",
+      "acceptanceCriteria": [
+        "ギャップが最小かつレビューしやすい変更で解消されている。",
+        "次回評価で改善を検出できるように、根拠が追加または更新されている。",
+        "検証コマンドが成功している、または失敗理由が記録されている。"
+      ],
+      "verificationCommands": [
+        "bun run verify"
+      ],
+      "createdAt": "2026-06-28T05:59:19.000Z"
+    },
+    {
+      "id": "fe881800-1fc8-4787-a4ac-8c214777c5ad",
+      "evaluationId": "a7e074d4-09ef-43f1-bbb0-b8904001a8d2",
+      "title": "bundle-builder の責務を evidence collector と prompt context builder に分ける",
+      "reason": "bundle-builder は tree 収集、source 選定、検証実行、notVerified 構築まで担っている。MVP では成立しているが、今後 runtime verification や audit-grade evidence を追加すると責務が膨らみやすい。",
+      "sourceGapIds": [
+        "f1bc6a9b-b642-48dc-b8a3-d931ee85d2c9"
+      ],
+      "sourceDimensionKeys": [
+        "architectureQuality",
+        "maintainability",
+        "extensibility"
+      ],
+      "expectedScoreGain": 3,
+      "expectedConfidenceGain": 0.04,
+      "complexity": 2,
+      "priority": 5,
+      "taskType": "feature",
+      "prompt": "次のギャップが検出されています: bundle-builder の責務を evidence collector と prompt context builder に分ける。\n理由: bundle-builder は tree 収集、source 選定、検証実行、notVerified 構築まで担っている。MVP では成立しているが、今後 runtime verification や audit-grade evidence を追加すると責務が膨らみやすい。\n影響する評価軸: architectureQuality、maintainability、extensibility。\nこのギャップを閉じる最小の変更を実装し、その後に検証コマンドを実行してください。",
+      "acceptanceCriteria": [
+        "ギャップが最小かつレビューしやすい変更で解消されている。",
+        "次回評価で改善を検出できるように、根拠が追加または更新されている。",
+        "検証コマンドが成功している、または失敗理由が記録されている。"
+      ],
+      "verificationCommands": [
+        "bun run typecheck",
+        "bun run test"
+      ],
+      "createdAt": "2026-06-28T05:59:19.000Z"
+    }
+  ],
+  "activityEvents": [
+    {
+      "id": "040bc5d0-6366-4928-b862-3193fb7671d2",
+      "seq": 0,
+      "createdAt": "2026-06-28T05:56:57.550Z",
+      "phase": "project",
+      "level": "info",
+      "source": "evaluator",
+      "message": "Loading project profile."
+    },
+    {
+      "id": "dfc24d37-ae70-473f-95d6-38980147f23a",
+      "seq": 1,
+      "createdAt": "2026-06-28T05:56:57.551Z",
+      "phase": "history",
+      "level": "info",
+      "source": "evaluator",
+      "message": "Loading previous evaluation."
+    },
+    {
+      "id": "eca4c963-8653-436b-87d5-907b7bfdcee4",
+      "seq": 2,
+      "createdAt": "2026-06-28T05:56:57.551Z",
+      "phase": "bundle",
+      "level": "info",
+      "source": "evaluator",
+      "message": "Building evaluation bundle and verification evidence."
+    },
+    {
+      "id": "4264a12c-fd7a-47e4-b118-89a8f13f336c",
+      "seq": 3,
+      "createdAt": "2026-06-28T05:57:02.025Z",
+      "phase": "bundle",
+      "level": "checkpoint",
+      "source": "evaluator",
+      "message": "Bundle ready: 18 source files, 1 verification run(s).",
+      "payload": {
+        "evidenceLevel": "runtime-verified",
+        "sourceFiles": [
+          "api/cli/evaluator-runtime.ts",
+          "api/modules/evaluations/bundle-builder.ts",
+          "api/modules/evaluations/evaluation.service.ts",
+          "api/modules/evaluations/improvement-generator.ts",
+          "api/app/server.ts",
+          "api/cli/bundle.ts",
+          "api/cli/evaluate.ts",
+          "api/cli/migrate.ts",
+          "api/db/index.ts",
+          "api/db/schema.ts",
+          "api/modules/evaluations/evaluation.repository.ts",
+          "api/modules/projects/project.repository.ts",
+          "api/cli/auth-create-admin.ts",
+          "api/middleware/auth.ts",
+          "api/modules/auth/auth-cookies.ts",
+          "api/modules/auth/auth.service.ts",
+          "web/src/App.tsx",
+          "web/src/main.tsx"
+        ],
+        "verificationRuns": [
+          {
+            "name": "verify",
+            "status": "passed",
+            "exitCode": 0,
+            "durationMs": 4462
+          }
+        ]
+      }
+    },
+    {
+      "id": "d5954de5-fcce-4699-af38-2eb45f3b1bdc",
+      "seq": 4,
+      "createdAt": "2026-06-28T05:57:02.025Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "evaluator",
+      "message": "Starting judge evaluation.",
+      "payload": {
+        "judge": {
+          "type": "codex-agent",
+          "model": "gpt-5.5",
+          "mode": "review-only"
+        }
+      }
+    },
+    {
+      "id": "37e53276-c612-4daa-83e2-7fea5ce022f1",
+      "seq": 5,
+      "createdAt": "2026-06-28T05:57:04.353Z",
+      "phase": "judge",
+      "level": "checkpoint",
+      "source": "codex",
+      "payload": {
+        "providerEvent": {
+          "type": "thread.started",
+          "thread_id": "019f0ccd-812d-7dd3-bab9-74264a8c4df4"
+        }
+      },
+      "message": "Codex thread started: 019f0ccd-812d-7dd3-bab9-74264a8c4df4.",
+      "status": "started"
+    },
+    {
+      "id": "23a6c331-face-4e96-85d5-6be91e47d0ff",
+      "seq": 6,
+      "createdAt": "2026-06-28T05:57:04.423Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "providerEvent": {
+          "type": "turn.started"
+        }
+      },
+      "message": "Codex turn started.",
+      "status": "started"
+    },
+    {
+      "id": "76162507-1c0c-4aca-8b2f-ed382c62c1bb",
+      "seq": 7,
+      "createdAt": "2026-06-28T05:57:16.306Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "initial_instructions",
+        "arguments": {},
+        "result": null,
+        "status": "in_progress",
+        "providerEvent": {
+          "type": "item.started",
+          "item": {
+            "id": "item_0",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "initial_instructions",
+            "arguments": {},
+            "result": null,
+            "error": null,
+            "status": "in_progress"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.started: context-still.initial_instructions",
+      "status": "in_progress"
+    },
+    {
+      "id": "cbbd092a-31e1-4828-a815-defbb9f008e0",
+      "seq": 8,
+      "createdAt": "2026-06-28T05:57:16.351Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "initial_instructions",
+        "arguments": {},
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "## 常用ルール\n- 常に日本語で返答する。\n- まず `context_compile` を呼び、作業の主導線とする。`goal` を必ず渡し、適切な `changeTypes` / `technologies` を指定する。\n- `goal` は達成したい状態を1-3文で具体的に書き、設計書パスや `design.md` などの文書参照は含めない。\n- 次の応答がユーザーへの確認質問になりそうで、かつ自律的に続行できる余地がある場合は、質問する前に `context_decision` を pre-question gate として呼ぶ。\n- ブロッカー由来の判断が必要な場合、ユーザーに質問する前に `context_decision` を呼ぶ。例: このまま進めるか、修正して進めるか、reject/rollback/discard/escalate すべきか、PR作成前の判断、危険操作や未完了Todoの扱い。\n- `context_decision` が `reject` を返した場合は、その判断を停止条件として扱い、実装・変更・PR作成などの対象アクションを継続しない。必要な報告や確認待ちに切り替える。\n- `context_decision` に従った作業が完了し、結果が分かったら `context_decision_feedback` を保存する。成功/失敗/ユーザー上書き/回帰検出などの outcome は、完了直後または pre-commit 時点で分かる範囲で記録する。\n- ユーザーに情報を提示する際、それが本当に有用であるかを厳格に評価し、不確実な情報やノイズでコンテキストを圧迫しない。\n- 作業中に再利用可能なルールや手順（手続き）を確立した場合は、プロジェクト依存の記述を除いて汎用化し、`register_candidates` で登録する。\n- candidate 登録時は、単なる作業記録ではなく、他の文脈でも再利用できる知識として体裁を整える。\n- candidate 登録時の title / body / avoid / prefer の自然文は日本語で書く。識別子、API名、コマンド、URL、エラーメッセージは原文を保持してよい。\n- 手続き候補は SKILL.md 相当の形式が必須であり、`Use when:` / `Workflow:` / `Verification:` / `Avoid:` の見出しをこの順に含めないと登録できない。\n- 完了報告の前に、`context_compile` の実行回数と `compile_eval` の実行回数を自己申告する。また、各 runId ごとに `compile_eval` を1件以上保存する。ただし、`context_compile` が `No Content` を返した runId には保存しない。\n\n## MCPツール種別\n- `context_compile`: 作業前の最小コンテキスト生成（主導線）。\n- `context_decision`: ブロッカー由来の判断が必要な時に、ユーザーへ質問する前の実行/修正/拒否/巻き戻し等を判断。`reject` は停止条件として扱う。\n- `context_decision_feedback`: `context_decision` 後の作業結果を Good/Bad または system/AI outcome として保存。\n- `register_candidates`: 複数 candidate の一括登録。\n- `compile_eval`: `No Content` 以外の `context_compile` の作業後評価を保存。\n- `search_memory` / `fetch_memory`: 過去会話・差分の参照（補助）。\n- `doctor`: DB / embedding / automation / run health の診断。"
+            }
+          ],
+          "structured_content": null
+        },
+        "status": "completed",
+        "providerEvent": {
+          "type": "item.completed",
+          "item": {
+            "id": "item_0",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "initial_instructions",
+            "arguments": {},
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "## 常用ルール\n- 常に日本語で返答する。\n- まず `context_compile` を呼び、作業の主導線とする。`goal` を必ず渡し、適切な `changeTypes` / `technologies` を指定する。\n- `goal` は達成したい状態を1-3文で具体的に書き、設計書パスや `design.md` などの文書参照は含めない。\n- 次の応答がユーザーへの確認質問になりそうで、かつ自律的に続行できる余地がある場合は、質問する前に `context_decision` を pre-question gate として呼ぶ。\n- ブロッカー由来の判断が必要な場合、ユーザーに質問する前に `context_decision` を呼ぶ。例: このまま進めるか、修正して進めるか、reject/rollback/discard/escalate すべきか、PR作成前の判断、危険操作や未完了Todoの扱い。\n- `context_decision` が `reject` を返した場合は、その判断を停止条件として扱い、実装・変更・PR作成などの対象アクションを継続しない。必要な報告や確認待ちに切り替える。\n- `context_decision` に従った作業が完了し、結果が分かったら `context_decision_feedback` を保存する。成功/失敗/ユーザー上書き/回帰検出などの outcome は、完了直後または pre-commit 時点で分かる範囲で記録する。\n- ユーザーに情報を提示する際、それが本当に有用であるかを厳格に評価し、不確実な情報やノイズでコンテキストを圧迫しない。\n- 作業中に再利用可能なルールや手順（手続き）を確立した場合は、プロジェクト依存の記述を除いて汎用化し、`register_candidates` で登録する。\n- candidate 登録時は、単なる作業記録ではなく、他の文脈でも再利用できる知識として体裁を整える。\n- candidate 登録時の title / body / avoid / prefer の自然文は日本語で書く。識別子、API名、コマンド、URL、エラーメッセージは原文を保持してよい。\n- 手続き候補は SKILL.md 相当の形式が必須であり、`Use when:` / `Workflow:` / `Verification:` / `Avoid:` の見出しをこの順に含めないと登録できない。\n- 完了報告の前に、`context_compile` の実行回数と `compile_eval` の実行回数を自己申告する。また、各 runId ごとに `compile_eval` を1件以上保存する。ただし、`context_compile` が `No Content` を返した runId には保存しない。\n\n## MCPツール種別\n- `context_compile`: 作業前の最小コンテキスト生成（主導線）。\n- `context_decision`: ブロッカー由来の判断が必要な時に、ユーザーへ質問する前の実行/修正/拒否/巻き戻し等を判断。`reject` は停止条件として扱う。\n- `context_decision_feedback`: `context_decision` 後の作業結果を Good/Bad または system/AI outcome として保存。\n- `register_candidates`: 複数 candidate の一括登録。\n- `compile_eval`: `No Content` 以外の `context_compile` の作業後評価を保存。\n- `search_memory` / `fetch_memory`: 過去会話・差分の参照（補助）。\n- `doctor`: DB / embedding / automation / run health の診断。"
+                }
+              ],
+              "structured_content": null
+            },
+            "error": null,
+            "status": "completed"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.completed: context-still.initial_instructions",
+      "status": "completed"
+    },
+    {
+      "id": "20ef08a0-f0db-4cdd-b71e-0a23998f4b92",
+      "seq": 9,
+      "createdAt": "2026-06-28T05:57:23.084Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "context_compile",
+        "arguments": {
+          "goal": "提供された評価 bundle とソース抜粋を根拠に、project-value-evaluator の価値を多軸でレビュー評価し、指定スキーマに合う JSON だけで返す。ファイル変更は行わない。",
+          "changeTypes": [
+            "review",
+            "evaluation"
+          ],
+          "technologies": [
+            "TypeScript",
+            "Hono",
+            "Bun",
+            "SQLite",
+            "Drizzle",
+            "React",
+            "Zod"
+          ]
+        },
+        "result": null,
+        "status": "in_progress",
+        "providerEvent": {
+          "type": "item.started",
+          "item": {
+            "id": "item_1",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "context_compile",
+            "arguments": {
+              "goal": "提供された評価 bundle とソース抜粋を根拠に、project-value-evaluator の価値を多軸でレビュー評価し、指定スキーマに合う JSON だけで返す。ファイル変更は行わない。",
+              "changeTypes": [
+                "review",
+                "evaluation"
+              ],
+              "technologies": [
+                "TypeScript",
+                "Hono",
+                "Bun",
+                "SQLite",
+                "Drizzle",
+                "React",
+                "Zod"
+              ]
+            },
+            "result": null,
+            "error": null,
+            "status": "in_progress"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.started: context-still.context_compile",
+      "status": "in_progress"
+    },
+    {
+      "id": "61870897-ed6e-45fc-9558-e2d7f9729abb",
+      "seq": 10,
+      "createdAt": "2026-06-28T05:57:32.970Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "context_compile",
+        "arguments": {
+          "goal": "提供された評価 bundle とソース抜粋を根拠に、project-value-evaluator の価値を多軸でレビュー評価し、指定スキーマに合う JSON だけで返す。ファイル変更は行わない。",
+          "changeTypes": [
+            "review",
+            "evaluation"
+          ],
+          "technologies": [
+            "TypeScript",
+            "Hono",
+            "Bun",
+            "SQLite",
+            "Drizzle",
+            "React",
+            "Zod"
+          ]
+        },
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "## Use when\n- 提供された評価 bundle とソース抜粋を根拠に、project-value-evaluator の価値を多軸でレビュー評価するとき。\n- 出力は指定スキーマに合う JSON のみで返し、ファイル変更は行わないとき。\n- 評価対象の根拠が bundle / 抜粋に限定され、根拠のない推測を避ける必要があるとき。\n\n## Workflow\n1. 評価 bundle とソース抜粋を読み、評価対象の事実だけを抽出する。\n2. 抽出した事実を、価値評価に必要な複数軸へ整理する。\n3. 各軸について、bundle と抜粋のどの記述を根拠にするかを対応付ける。\n4. 根拠が不足する軸は、推測で埋めず「評価不能」または保留として扱う。\n5. 変更作業は行わず、レビュー評価の結果だけを JSON に整形する。\n6. 出力前に、指定スキーマに沿っているかを確認し、余計な文章を混ぜない。\n\n## Verification\n- 評価が bundle とソース抜粋の記述に直接支えられているか確認する。\n- 多軸評価になっており、単一観点に偏っていないか確認する。\n- 根拠のない推測、スキーマ外の説明、ファイル変更の記述が含まれていないか確認する。\n- 最終出力が JSON のみで、指定スキーマに適合しているか確認する。\n\n## Avoid\n- ファイル変更、修正提案の実行、ついで対応を行わない。\n- bundle / 抜粋にない事実を追加しない。\n- 根拠のない推測で価値を補完しない。\n- スキーマ外の説明文、前置き、補足コメントを出さない。\n- negative guardrails を参考情報として流すだけにせず、非目標・禁止事項・確認条件として扱う。"
+            }
+          ],
+          "structured_content": null
+        },
+        "status": "completed",
+        "providerEvent": {
+          "type": "item.completed",
+          "item": {
+            "id": "item_1",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "context_compile",
+            "arguments": {
+              "goal": "提供された評価 bundle とソース抜粋を根拠に、project-value-evaluator の価値を多軸でレビュー評価し、指定スキーマに合う JSON だけで返す。ファイル変更は行わない。",
+              "changeTypes": [
+                "review",
+                "evaluation"
+              ],
+              "technologies": [
+                "TypeScript",
+                "Hono",
+                "Bun",
+                "SQLite",
+                "Drizzle",
+                "React",
+                "Zod"
+              ]
+            },
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "## Use when\n- 提供された評価 bundle とソース抜粋を根拠に、project-value-evaluator の価値を多軸でレビュー評価するとき。\n- 出力は指定スキーマに合う JSON のみで返し、ファイル変更は行わないとき。\n- 評価対象の根拠が bundle / 抜粋に限定され、根拠のない推測を避ける必要があるとき。\n\n## Workflow\n1. 評価 bundle とソース抜粋を読み、評価対象の事実だけを抽出する。\n2. 抽出した事実を、価値評価に必要な複数軸へ整理する。\n3. 各軸について、bundle と抜粋のどの記述を根拠にするかを対応付ける。\n4. 根拠が不足する軸は、推測で埋めず「評価不能」または保留として扱う。\n5. 変更作業は行わず、レビュー評価の結果だけを JSON に整形する。\n6. 出力前に、指定スキーマに沿っているかを確認し、余計な文章を混ぜない。\n\n## Verification\n- 評価が bundle とソース抜粋の記述に直接支えられているか確認する。\n- 多軸評価になっており、単一観点に偏っていないか確認する。\n- 根拠のない推測、スキーマ外の説明、ファイル変更の記述が含まれていないか確認する。\n- 最終出力が JSON のみで、指定スキーマに適合しているか確認する。\n\n## Avoid\n- ファイル変更、修正提案の実行、ついで対応を行わない。\n- bundle / 抜粋にない事実を追加しない。\n- 根拠のない推測で価値を補完しない。\n- スキーマ外の説明文、前置き、補足コメントを出さない。\n- negative guardrails を参考情報として流すだけにせず、非目標・禁止事項・確認条件として扱う。"
+                }
+              ],
+              "structured_content": null
+            },
+            "error": null,
+            "status": "completed"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.completed: context-still.context_compile",
+      "status": "completed"
+    },
+    {
+      "id": "5c3e75aa-a6d1-4d04-965c-db4d25ab28c2",
+      "seq": 11,
+      "createdAt": "2026-06-28T05:57:55.395Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "compile_eval",
+        "arguments": {
+          "outcome": "useful",
+          "actionability": 86,
+          "clarity": 88,
+          "coverage": 82,
+          "relevance": 92,
+          "specificity": 85,
+          "title": "評価 bundle レビュー用コンテキスト",
+          "body": "提供された bundle と sourceFiles 抜粋に限定して多軸評価し、未確認事項を notVerified として分離する方針が有用だった。最終出力はスキーマ準拠 JSON のみにする。"
+        },
+        "result": null,
+        "status": "in_progress",
+        "providerEvent": {
+          "type": "item.started",
+          "item": {
+            "id": "item_2",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "compile_eval",
+            "arguments": {
+              "outcome": "useful",
+              "actionability": 86,
+              "clarity": 88,
+              "coverage": 82,
+              "relevance": 92,
+              "specificity": 85,
+              "title": "評価 bundle レビュー用コンテキスト",
+              "body": "提供された bundle と sourceFiles 抜粋に限定して多軸評価し、未確認事項を notVerified として分離する方針が有用だった。最終出力はスキーマ準拠 JSON のみにする。"
+            },
+            "result": null,
+            "error": null,
+            "status": "in_progress"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.started: context-still.compile_eval",
+      "status": "in_progress"
+    },
+    {
+      "id": "d66cf94f-9da4-4d21-8955-a8e3366a00f2",
+      "seq": 12,
+      "createdAt": "2026-06-28T05:57:55.417Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "compile_eval",
+        "arguments": {
+          "outcome": "useful",
+          "actionability": 86,
+          "clarity": 88,
+          "coverage": 82,
+          "relevance": 92,
+          "specificity": 85,
+          "title": "評価 bundle レビュー用コンテキスト",
+          "body": "提供された bundle と sourceFiles 抜粋に限定して多軸評価し、未確認事項を notVerified として分離する方針が有用だった。最終出力はスキーマ準拠 JSON のみにする。"
+        },
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n  \"evaluation\": {\n    \"actionability\": 86,\n    \"avg\": 86,\n    \"body\": \"提供された bundle と sourceFiles 抜粋に限定して多軸評価し、未確認事項を notVerified として分離する方針が有用だった。最終出力はスキーマ準拠 JSON のみにする。\",\n    \"clarity\": 88,\n    \"coverage\": 82,\n    \"createdAt\": \"unix-ms:1782626275415\",\n    \"id\": \"00000000-0000-0000-18bd-292719674926\",\n    \"outcome\": \"useful\",\n    \"relevance\": 92,\n    \"runId\": \"00000000-0000-0000-18bd-291f9ae2ea70\",\n    \"sessionId\": \"019f0ccd-812d-7dd3-bab9-74264a8c4df4\",\n    \"source\": \"mcp\",\n    \"specificity\": 85,\n    \"title\": \"評価 bundle レビュー用コンテキスト\",\n    \"updatedAt\": \"unix-ms:1782626275415\"\n  },\n  \"resolvedFrom\": \"latest_session_run\"\n}"
+            }
+          ],
+          "structured_content": null
+        },
+        "status": "completed",
+        "providerEvent": {
+          "type": "item.completed",
+          "item": {
+            "id": "item_2",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "compile_eval",
+            "arguments": {
+              "outcome": "useful",
+              "actionability": 86,
+              "clarity": 88,
+              "coverage": 82,
+              "relevance": 92,
+              "specificity": 85,
+              "title": "評価 bundle レビュー用コンテキスト",
+              "body": "提供された bundle と sourceFiles 抜粋に限定して多軸評価し、未確認事項を notVerified として分離する方針が有用だった。最終出力はスキーマ準拠 JSON のみにする。"
+            },
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "{\n  \"evaluation\": {\n    \"actionability\": 86,\n    \"avg\": 86,\n    \"body\": \"提供された bundle と sourceFiles 抜粋に限定して多軸評価し、未確認事項を notVerified として分離する方針が有用だった。最終出力はスキーマ準拠 JSON のみにする。\",\n    \"clarity\": 88,\n    \"coverage\": 82,\n    \"createdAt\": \"unix-ms:1782626275415\",\n    \"id\": \"00000000-0000-0000-18bd-292719674926\",\n    \"outcome\": \"useful\",\n    \"relevance\": 92,\n    \"runId\": \"00000000-0000-0000-18bd-291f9ae2ea70\",\n    \"sessionId\": \"019f0ccd-812d-7dd3-bab9-74264a8c4df4\",\n    \"source\": \"mcp\",\n    \"specificity\": 85,\n    \"title\": \"評価 bundle レビュー用コンテキスト\",\n    \"updatedAt\": \"unix-ms:1782626275415\"\n  },\n  \"resolvedFrom\": \"latest_session_run\"\n}"
+                }
+              ],
+              "structured_content": null
+            },
+            "error": null,
+            "status": "completed"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.completed: context-still.compile_eval",
+      "status": "completed"
+    },
+    {
+      "id": "567742a5-1770-446e-8d22-27b0629131fc",
+      "seq": 13,
+      "createdAt": "2026-06-28T05:59:18.967Z",
+      "phase": "judge",
+      "level": "checkpoint",
+      "source": "codex",
+      "payload": {
+        "itemType": "agent_message",
+        "text": "{\"score\":82,\"overallConfidence\":0.82,\"summary\":\"ProjectValueEvaluator は、coding agents がプロジェクト価値を評価し、差分と改善候補を保存するための MVP としてかなり実用段階に近い。CLI/API/DB/評価サービス/改善生成/検証パイプラインが接続され、`bun run verify` も成功している。一方で、README/LLM_CONTEXT の Evidence Policy と実装の自動 verify 実行に不整合があり、Codex judge 境界や実際のサンプル出力・UI 操作は今回の bundle では十分確認できていない。\",\"dimensions\":[{\"key\":\"conceptValue\",\"score\":88,\"confidence\":0.88,\"rationale\":\"普段の曖昧な価値評価依頼を、rubric、schema、保存履歴、差分、改善依頼へ固定化する狙いは primaryAudience の coding agents に明確に合っている。\",\"evidenceRefs\":[\"README.md\",\"LLM_CONTEXT.md\",\"api/modules/evaluations/evaluation.service.ts\",\"api/modules/evaluations/improvement-generator.ts\"],\"caveats\":[\"実際の利用者が評価結果をどの程度改善実装に使えるかはサンプル出力未確認。\"]},{\"key\":\"implementationCompleteness\",\"score\":79,\"confidence\":0.82,\"rationale\":\"CLI、API、bundle 生成、評価保存、改善依頼生成、SQLite 永続化、verify が揃っており MVP 中核は実装済み。ただし provider adapter の実装詳細と UI 実行確認は今回未確認。\",\"evidenceRefs\":[\"api/cli/evaluate.ts\",\"api/cli/bundle.ts\",\"api/modules/evaluations/evaluation.service.ts\",\"api/modules/evaluations/evaluation.repository.ts\",\"verificationRuns.verify\"],\"caveats\":[\"`api/modules/llm/judge-client.ts` は repoTree にあるが sourceFiles 抜粋では未確認。\"]},{\"key\":\"architectureQuality\",\"score\":84,\"confidence\":0.84,\"rationale\":\"ProjectService、EvaluationService、Repository、shared schemas、CLI/API の分離があり、評価 usecase を中心にした構成は読みやすい。永続化も transaction で束ねられている。\",\"evidenceRefs\":[\"api/modules/evaluations/evaluation.service.ts\",\"api/modules/evaluations/evaluation.repository.ts\",\"api/db/schema.ts\",\"shared/schemas/evaluation.schema.ts\"],\"caveats\":[\"bundle-builder が収集、分類、検証実行を多く抱えており、今後 evidence collector 化する余地がある。\"]},{\"key\":\"maintainability\",\"score\":81,\"confidence\":0.8,\"rationale\":\"TypeScript/Zod/Drizzle による境界の明示、verify スクリプト、テスト群の存在により保守しやすい。ただし bundle-builder は責務が広く、README と実装方針の不一致が保守上の混乱要因。\",\"evidenceRefs\":[\"api/modules/evaluations/bundle-builder.ts\",\"api/modules/evaluations/evaluation.service.ts\",\"api/db/schema.ts\",\"package.json\"],\"caveats\":[\"sourceFiles はサンプルであり、全量の循環依存や未使用コードは未確認。\"]},{\"key\":\"security\",\"score\":72,\"confidence\":0.7,\"rationale\":\"JWT/cookie/refresh token/認証 middleware があり、SQLite URL を file path に制限するなど基本境界はある。評価ワークフロー固有のパスアクセス、LLM 境界、CLI 入力の監査級確認は不足している。\",\"evidenceRefs\":[\"api/middleware/auth.ts\",\"api/modules/auth/auth-cookies.ts\",\"api/modules/auth/auth.service.ts\",\"api/db/index.ts\"],\"caveats\":[\"監査級のセキュリティ挙動は bundle 自身も未検証としている。\"]},{\"key\":\"testability\",\"score\":87,\"confidence\":0.9,\"rationale\":\"`bun run verify` が typecheck/lint/format/test/build を通して成功しており、repoTree に route/service/auth/llm 周辺のテストが多い。\",\"evidenceRefs\":[\"verificationRuns.verify\",\"package.json\",\"api/modules/evaluations/evaluation.service.test.ts\",\"api/routes/projects.route.test.ts\"],\"caveats\":[\"テスト内容の網羅性までは抜粋だけでは確認していない。\"]},{\"key\":\"documentation\",\"score\":80,\"confidence\":0.82,\"rationale\":\"README と LLM_CONTEXT は目的、MVP、構成、CLI/API、検証コマンド、non-goals を具体的に説明している。一方で Evidence Policy は実装の verify 実行と食い違っている。\",\"evidenceRefs\":[\"README.md\",\"LLM_CONTEXT.md\",\"api/modules/evaluations/bundle-builder.ts\"],\"caveats\":[\"AGENTS.md は missingInputs で未提供。\"]},{\"key\":\"agentUsability\",\"score\":86,\"confidence\":0.84,\"rationale\":\"CLI の `--json`、profile 入力、評価結果・source checks・gaps・improvements の出力、改善依頼 prompt 生成があり、coding agents が次作業へ移りやすい。\",\"evidenceRefs\":[\"api/cli/evaluator-runtime.ts\",\"api/cli/evaluate.ts\",\"api/modules/evaluations/improvement-generator.ts\"],\"caveats\":[\"実際の JSON 出力サンプル品質は未レビュー。\"]},{\"key\":\"extensibility\",\"score\":80,\"confidence\":0.78,\"rationale\":\"JudgeSelection、provider adapter 境界、shared schemas、JSON 保存、dimension/gap ベースの改善生成により拡張余地はある。未実装 provider の扱いは設計上明示されているが、実装詳細は未確認。\",\"evidenceRefs\":[\"LLM_CONTEXT.md\",\"api/modules/evaluations/evaluation.service.ts\",\"api/modules/evaluations/improvement-generator.ts\",\"api/db/schema.ts\"],\"caveats\":[\"Codex/OpenAI/Azure/Local LLM adapter の実装差分は確認できていない。\"]},{\"key\":\"reliability\",\"score\":79,\"confidence\":0.82,\"rationale\":\"評価実行は activity event を出し、bundle/evaluation/improvement を transaction で保存し、verify も成功している。失敗時に暗黙 fallback しない方針も良い。ただし appLaunch と sample output は未確認。\",\"evidenceRefs\":[\"api/modules/evaluations/evaluation.service.ts\",\"api/modules/evaluations/evaluation.repository.ts\",\"api/cli/evaluator-runtime.ts\",\"verificationRuns.verify\"],\"caveats\":[\"実際の API サーバー起動、CLI 評価完走、judge 失敗時挙動は今回未確認。\"]},{\"key\":\"strategicFit\",\"score\":89,\"confidence\":0.86,\"rationale\":\"projectIdeal、primaryAudience、targetWorkflow に対して、評価、履歴、差分、改善候補生成に集中しており、non-goals も MVP に合っている。\",\"evidenceRefs\":[\"README.md\",\"LLM_CONTEXT.md\",\"api/modules/evaluations/evaluation.service.ts\"],\"caveats\":[\"Evidence Policy の方針差分を解消しないと、baseline と runtime-verified の位置づけが曖昧になる。\"]},{\"key\":\"ossProductValue\",\"score\":75,\"confidence\":0.74,\"rationale\":\"MIT、README、CLI/API、検証コマンド、ローカル SQLite 構成があり OSS として試せる形に近い。ただし judge 認証、サンプル成果物、導入後の具体例、UI 動作確認の公開証跡が不足している。\",\"evidenceRefs\":[\"package.json\",\"README.md\",\"api/cli/evaluate.ts\",\"api/app/server.ts\"],\"caveats\":[\"配布パッケージとしての実運用手順や example evaluation は未確認。\"]}],\"strengths\":[\"評価 bundle 生成、judge 実行、保存、改善依頼生成までの主経路が `EvaluationService` に集約されている。\",\"SQLite + Drizzle で profile、bundle、evaluation、improvement、activity events を永続化しており、前回比較や履歴利用の土台がある。\",\"CLI/API/README/LLM_CONTEXT が揃っており、coding agents が操作しやすいプロジェクト形状になっている。\",\"`bun run verify` が typecheck/lint/format/test/build を通して成功しており、現時点の検証シグナルが強い。\",\"改善依頼生成が gap の種類と影響 dimension から taskType、prompt、acceptanceCriteria、verificationCommands に落ちるため、次アクションに接続しやすい。\"],\"gapsTo100\":[{\"title\":\"Evidence Policy と実装の自動 verify 実行の不整合を解消する\",\"kind\":\"documentation-gap\",\"affectedDimensions\":[\"documentation\",\"reliability\",\"agentUsability\",\"strategicFit\"],\"expectedScoreGain\":4,\"expectedConfidenceGain\":0.05,\"rationale\":\"README/LLM_CONTEXT は baseline 評価で build/test/verify を自動実行しないと説明しているが、bundle-builder は scripts.verify を選択して実行している。価値は高いが、利用者と agent にとって評価の証拠レベルが混乱する。\"},{\"title\":\"Judge provider 境界の実装証跡を評価 bundle に含める\",\"kind\":\"evidence-gap\",\"affectedDimensions\":[\"implementationCompleteness\",\"extensibility\",\"reliability\",\"security\"],\"expectedScoreGain\":5,\"expectedConfidenceGain\":0.08,\"rationale\":\"LLM_CONTEXT は Codex-first judge と未実装 adapter の扱いを重視しているが、今回の sourceFiles 抜粋には `api/modules/llm/judge-client.ts` が含まれていない。中核外部境界の確認不足が評価信頼度を下げている。\"},{\"title\":\"CLI/API/UI のサンプル出力を保存してレビュー可能にする\",\"kind\":\"runtime-gap\",\"affectedDimensions\":[\"agentUsability\",\"ossProductValue\",\"reliability\",\"testability\"],\"expectedScoreGain\":4,\"expectedConfidenceGain\":0.07,\"rationale\":\"verify は成功しているが、bundle の inspectedInputs では appLaunched と sampleOutputReviewed が false。coding agents 向け製品としては、実際の評価 JSON、改善依頼、UI 表示のサンプルが価値判断に必要。\"},{\"title\":\"評価対象 rootPath とファイルアクセス境界の安全性を確認する\",\"kind\":\"evidence-gap\",\"affectedDimensions\":[\"security\",\"reliability\"],\"expectedScoreGain\":3,\"expectedConfidenceGain\":0.05,\"rationale\":\"認証や cookie の基本実装は確認できたが、任意 project path を読む評価サービスとしての path 境界、秘密情報除外、LLM 送信内容の制御は抜粋だけでは十分確認できない。\"},{\"title\":\"bundle-builder の責務を evidence collector と prompt context builder に分ける\",\"kind\":\"implementation-gap\",\"affectedDimensions\":[\"architectureQuality\",\"maintainability\",\"extensibility\"],\"expectedScoreGain\":3,\"expectedConfidenceGain\":0.04,\"rationale\":\"bundle-builder は tree 収集、source 選定、検証実行、notVerified 構築まで担っている。MVP では成立しているが、今後 runtime verification や audit-grade evidence を追加すると責務が膨らみやすい。\"}],\"sourceInspections\":[{\"checkId\":\"entrypoint-flow\",\"title\":\"主要ワークフローへの実行経路\",\"status\":\"passed\",\"files\":[\"api/cli/evaluate.ts\",\"api/cli/bundle.ts\",\"api/cli/evaluator-runtime.ts\",\"api/modules/evaluations/evaluation.service.ts\",\"api/app/server.ts\",\"web/src/App.tsx\",\"web/src/main.tsx\"],\"findings\":[\"CLI の evaluate/bundle は共通 runtime から ProjectService と EvaluationService を組み立て、中核 usecase に接続している。\",\"server entrypoint は Hono app を Bun.serve に渡し、shutdown 時に DB 接続を閉じる経路を持つ。\",\"React entrypoint は router と query client を構成しているが、評価 UI の詳細画面は今回の sourceFiles 抜粋では確認していない。\"],\"evidenceRefs\":[\"api/cli/evaluate.ts\",\"api/cli/bundle.ts\",\"api/cli/evaluator-runtime.ts\",\"api/modules/evaluations/evaluation.service.ts\",\"api/app/server.ts\",\"web/src/App.tsx\",\"web/src/main.tsx\"]},{\"checkId\":\"domain-logic\",\"title\":\"対象プロジェクトの中核ロジック\",\"status\":\"passed\",\"files\":[\"api/modules/evaluations/bundle-builder.ts\",\"api/modules/evaluations/evaluation.service.ts\",\"api/modules/evaluations/improvement-generator.ts\",\"api/cli/evaluator-runtime.ts\"],\"findings\":[\"EvaluationService が profile 読み込み、前回評価取得、bundle 生成、judge 実行、保存、改善依頼生成を一つの主経路として束ねている。\",\"improvement-generator は gap を taskType、prompt、acceptanceCriteria、verificationCommands へ変換し、評価から次改善へつなげている。\",\"bundle-builder は source inspection plan と sourceFiles を構築しているが、README の baseline Evidence Policy と verify 実行の挙動に不整合がある。\"],\"evidenceRefs\":[\"api/modules/evaluations/evaluation.service.ts\",\"api/modules/evaluations/improvement-generator.ts\",\"api/modules/evaluations/bundle-builder.ts\",\"README.md\",\"LLM_CONTEXT.md\"]},{\"checkId\":\"data-persistence\",\"title\":\"状態管理と再現性\",\"status\":\"passed\",\"files\":[\"api/db/schema.ts\",\"api/db/index.ts\",\"api/modules/evaluations/evaluation.repository.ts\",\"api/modules/projects/project.repository.ts\"],\"findings\":[\"projectProfiles、evaluationBundles、projectEvaluations、improvementRequests、evaluationActivityEvents が schema として定義され、履歴と改善依頼の保存先がある。\",\"createEvaluationRun は bundle、evaluation、improvements、activity events を transaction で保存している。\",\"JSON text 保存は MVP として妥当だが、後で横断集計する場合は一部正規化が必要になる。\"],\"evidenceRefs\":[\"api/db/schema.ts\",\"api/modules/evaluations/evaluation.repository.ts\",\"api/modules/projects/project.repository.ts\",\"api/db/index.ts\"]},{\"checkId\":\"external-boundary\",\"title\":\"外部境界と失敗時挙動\",\"status\":\"partial\",\"files\":[\"api/cli/auth-create-admin.ts\",\"api/middleware/auth.ts\",\"api/modules/auth/auth-cookies.ts\",\"api/modules/auth/auth.service.ts\",\"api/db/index.ts\",\"api/cli/migrate.ts\"],\"findings\":[\"認証 middleware は Bearer/cookie token を検証し、非 active user を拒否している。\",\"auth cookie は httpOnly、secure、sameSite、path を設定しており、refresh cookie は `/api/auth` に限定している。\",\"SQLite 接続は network database URL を拒否する。\",\"評価の最重要外部境界である Codex/LLM judge client は今回の sourceFiles 抜粋に含まれず、provider 失敗時挙動は部分確認に留まる。\"],\"evidenceRefs\":[\"api/middleware/auth.ts\",\"api/modules/auth/auth-cookies.ts\",\"api/modules/auth/auth.service.ts\",\"api/db/index.ts\",\"api/cli/migrate.ts\"]},{\"checkId\":\"verification-signal\",\"title\":\"検証可能性\",\"status\":\"passed\",\"files\":[\"web/src/App.tsx\",\"web/src/main.tsx\",\"api/cli/evaluator-runtime.ts\"],\"findings\":[\"`bun run verify` が typecheck、lint、format、test、build をすべて成功させている。\",\"package scripts に個別検証コマンドと verify が定義されている。\",\"repoTree には service、route、auth、llm 周辺の test files が多数あり、検証文化は強い。\"],\"evidenceRefs\":[\"verificationRuns.verify\",\"package.json\",\"repoTree\"]},{\"checkId\":\"agent-output-contract\",\"title\":\"利用者へ渡る操作・出力契約\",\"status\":\"partial\",\"files\":[\"api/cli/evaluator-runtime.ts\",\"api/modules/evaluations/improvement-generator.ts\",\"api/modules/evaluations/evaluation.repository.ts\",\"api/db/schema.ts\"],\"findings\":[\"CLI は JSON 出力と人間向け出力を分け、score、confidence、verification runs、source checks、top gaps、next improvements を表示する。\",\"改善依頼は gap 由来の prompt、acceptance criteria、verification commands を持ち、coding agents が次タスクへ移りやすい。\",\"sampleOutputReviewed が false のため、実際の出力が agent にとって十分読みやすいかは未確認。\"],\"evidenceRefs\":[\"api/cli/evaluator-runtime.ts\",\"api/modules/evaluations/improvement-generator.ts\",\"api/modules/evaluations/evaluation.repository.ts\",\"api/db/schema.ts\",\"inspectedInputs.sampleOutputReviewed\"]}],\"notVerified\":[\"アプリサーバーを実際に起動して API/UI を操作する確認。\",\"`api/modules/llm/judge-client.ts` の Codex SDK 境界、未実装 provider の失敗挙動、raw output handling。\",\"CLI の `evaluator:evaluate --json` と `evaluator:reevaluate --json` の実サンプル出力品質。\",\"ソースコード全量の監査、特に path 読み取り、秘密情報除外、LLM 送信データ制御。\",\"監査級のセキュリティ挙動。\",\"AGENTS.md は missingInputs で未確認。\"],\"nextEvidenceToCollect\":[\"一時 SQLite DB で migration から `evaluator:evaluate --json`、`evaluator:reevaluate --json` まで実行し、成果物 JSON を保存する。\",\"Hono `app.request` で project 作成、evaluation 実行、latest/improvements 取得の API サンプルを確認する。\",\"`api/modules/llm/judge-client.ts` とその test を source inspection 対象に追加し、provider 失敗時の出力契約を確認する。\",\"UI を起動して Home/Settings の評価ワークフローを操作し、スクリーンショットまたは DOM レベルで確認する。\",\"Evidence Policy を更新するか、baseline 評価で verify を実行しない構成へ分けたうえで、bundle の evidenceLevel と notVerified の意味を再確認する。\"]}",
+        "providerEvent": {
+          "type": "item.completed",
+          "item": {
+            "id": "item_3",
+            "type": "agent_message",
+            "text": "{\"score\":82,\"overallConfidence\":0.82,\"summary\":\"ProjectValueEvaluator は、coding agents がプロジェクト価値を評価し、差分と改善候補を保存するための MVP としてかなり実用段階に近い。CLI/API/DB/評価サービス/改善生成/検証パイプラインが接続され、`bun run verify` も成功している。一方で、README/LLM_CONTEXT の Evidence Policy と実装の自動 verify 実行に不整合があり、Codex judge 境界や実際のサンプル出力・UI 操作は今回の bundle では十分確認できていない。\",\"dimensions\":[{\"key\":\"conceptValue\",\"score\":88,\"confidence\":0.88,\"rationale\":\"普段の曖昧な価値評価依頼を、rubric、schema、保存履歴、差分、改善依頼へ固定化する狙いは primaryAudience の coding agents に明確に合っている。\",\"evidenceRefs\":[\"README.md\",\"LLM_CONTEXT.md\",\"api/modules/evaluations/evaluation.service.ts\",\"api/modules/evaluations/improvement-generator.ts\"],\"caveats\":[\"実際の利用者が評価結果をどの程度改善実装に使えるかはサンプル出力未確認。\"]},{\"key\":\"implementationCompleteness\",\"score\":79,\"confidence\":0.82,\"rationale\":\"CLI、API、bundle 生成、評価保存、改善依頼生成、SQLite 永続化、verify が揃っており MVP 中核は実装済み。ただし provider adapter の実装詳細と UI 実行確認は今回未確認。\",\"evidenceRefs\":[\"api/cli/evaluate.ts\",\"api/cli/bundle.ts\",\"api/modules/evaluations/evaluation.service.ts\",\"api/modules/evaluations/evaluation.repository.ts\",\"verificationRuns.verify\"],\"caveats\":[\"`api/modules/llm/judge-client.ts` は repoTree にあるが sourceFiles 抜粋では未確認。\"]},{\"key\":\"architectureQuality\",\"score\":84,\"confidence\":0.84,\"rationale\":\"ProjectService、EvaluationService、Repository、shared schemas、CLI/API の分離があり、評価 usecase を中心にした構成は読みやすい。永続化も transaction で束ねられている。\",\"evidenceRefs\":[\"api/modules/evaluations/evaluation.service.ts\",\"api/modules/evaluations/evaluation.repository.ts\",\"api/db/schema.ts\",\"shared/schemas/evaluation.schema.ts\"],\"caveats\":[\"bundle-builder が収集、分類、検証実行を多く抱えており、今後 evidence collector 化する余地がある。\"]},{\"key\":\"maintainability\",\"score\":81,\"confidence\":0.8,\"rationale\":\"TypeScript/Zod/Drizzle による境界の明示、verify スクリプト、テスト群の存在により保守しやすい。ただし bundle-builder は責務が広く、README と実装方針の不一致が保守上の混乱要因。\",\"evidenceRefs\":[\"api/modules/evaluations/bundle-builder.ts\",\"api/modules/evaluations/evaluation.service.ts\",\"api/db/schema.ts\",\"package.json\"],\"caveats\":[\"sourceFiles はサンプルであり、全量の循環依存や未使用コードは未確認。\"]},{\"key\":\"security\",\"score\":72,\"confidence\":0.7,\"rationale\":\"JWT/cookie/refresh token/認証 middleware があり、SQLite URL を file path に制限するなど基本境界はある。評価ワークフロー固有のパスアクセス、LLM 境界、CLI 入力の監査級確認は不足している。\",\"evidenceRefs\":[\"api/middleware/auth.ts\",\"api/modules/auth/auth-cookies.ts\",\"api/modules/auth/auth.service.ts\",\"api/db/index.ts\"],\"caveats\":[\"監査級のセキュリティ挙動は bundle 自身も未検証としている。\"]},{\"key\":\"testability\",\"score\":87,\"confidence\":0.9,\"rationale\":\"`bun run verify` が typecheck/lint/format/test/build を通して成功しており、repoTree に route/service/auth/llm 周辺のテストが多い。\",\"evidenceRefs\":[\"verificationRuns.verify\",\"package.json\",\"api/modules/evaluations/evaluation.service.test.ts\",\"api/routes/projects.route.test.ts\"],\"caveats\":[\"テスト内容の網羅性までは抜粋だけでは確認していない。\"]},{\"key\":\"documentation\",\"score\":80,\"confidence\":0.82,\"rationale\":\"README と LLM_CONTEXT は目的、MVP、構成、CLI/API、検証コマンド、non-goals を具体的に説明している。一方で Evidence Policy は実装の verify 実行と食い違っている。\",\"evidenceRefs\":[\"README.md\",\"LLM_CONTEXT.md\",\"api/modules/evaluations/bundle-builder.ts\"],\"caveats\":[\"AGENTS.md は missingInputs で未提供。\"]},{\"key\":\"agentUsability\",\"score\":86,\"confidence\":0.84,\"rationale\":\"CLI の `--json`、profile 入力、評価結果・source checks・gaps・improvements の出力、改善依頼 prompt 生成があり、coding agents が次作業へ移りやすい。\",\"evidenceRefs\":[\"api/cli/evaluator-runtime.ts\",\"api/cli/evaluate.ts\",\"api/modules/evaluations/improvement-generator.ts\"],\"caveats\":[\"実際の JSON 出力サンプル品質は未レビュー。\"]},{\"key\":\"extensibility\",\"score\":80,\"confidence\":0.78,\"rationale\":\"JudgeSelection、provider adapter 境界、shared schemas、JSON 保存、dimension/gap ベースの改善生成により拡張余地はある。未実装 provider の扱いは設計上明示されているが、実装詳細は未確認。\",\"evidenceRefs\":[\"LLM_CONTEXT.md\",\"api/modules/evaluations/evaluation.service.ts\",\"api/modules/evaluations/improvement-generator.ts\",\"api/db/schema.ts\"],\"caveats\":[\"Codex/OpenAI/Azure/Local LLM adapter の実装差分は確認できていない。\"]},{\"key\":\"reliability\",\"score\":79,\"confidence\":0.82,\"rationale\":\"評価実行は activity event を出し、bundle/evaluation/improvement を transaction で保存し、verify も成功している。失敗時に暗黙 fallback しない方針も良い。ただし appLaunch と sample output は未確認。\",\"evidenceRefs\":[\"api/modules/evaluations/evaluation.service.ts\",\"api/modules/evaluations/evaluation.repository.ts\",\"api/cli/evaluator-runtime.ts\",\"verificationRuns.verify\"],\"caveats\":[\"実際の API サーバー起動、CLI 評価完走、judge 失敗時挙動は今回未確認。\"]},{\"key\":\"strategicFit\",\"score\":89,\"confidence\":0.86,\"rationale\":\"projectIdeal、primaryAudience、targetWorkflow に対して、評価、履歴、差分、改善候補生成に集中しており、non-goals も MVP に合っている。\",\"evidenceRefs\":[\"README.md\",\"LLM_CONTEXT.md\",\"api/modules/evaluations/evaluation.service.ts\"],\"caveats\":[\"Evidence Policy の方針差分を解消しないと、baseline と runtime-verified の位置づけが曖昧になる。\"]},{\"key\":\"ossProductValue\",\"score\":75,\"confidence\":0.74,\"rationale\":\"MIT、README、CLI/API、検証コマンド、ローカル SQLite 構成があり OSS として試せる形に近い。ただし judge 認証、サンプル成果物、導入後の具体例、UI 動作確認の公開証跡が不足している。\",\"evidenceRefs\":[\"package.json\",\"README.md\",\"api/cli/evaluate.ts\",\"api/app/server.ts\"],\"caveats\":[\"配布パッケージとしての実運用手順や example evaluation は未確認。\"]}],\"strengths\":[\"評価 bundle 生成、judge 実行、保存、改善依頼生成までの主経路が `EvaluationService` に集約されている。\",\"SQLite + Drizzle で profile、bundle、evaluation、improvement、activity events を永続化しており、前回比較や履歴利用の土台がある。\",\"CLI/API/README/LLM_CONTEXT が揃っており、coding agents が操作しやすいプロジェクト形状になっている。\",\"`bun run verify` が typecheck/lint/format/test/build を通して成功しており、現時点の検証シグナルが強い。\",\"改善依頼生成が gap の種類と影響 dimension から taskType、prompt、acceptanceCriteria、verificationCommands に落ちるため、次アクションに接続しやすい。\"],\"gapsTo100\":[{\"title\":\"Evidence Policy と実装の自動 verify 実行の不整合を解消する\",\"kind\":\"documentation-gap\",\"affectedDimensions\":[\"documentation\",\"reliability\",\"agentUsability\",\"strategicFit\"],\"expectedScoreGain\":4,\"expectedConfidenceGain\":0.05,\"rationale\":\"README/LLM_CONTEXT は baseline 評価で build/test/verify を自動実行しないと説明しているが、bundle-builder は scripts.verify を選択して実行している。価値は高いが、利用者と agent にとって評価の証拠レベルが混乱する。\"},{\"title\":\"Judge provider 境界の実装証跡を評価 bundle に含める\",\"kind\":\"evidence-gap\",\"affectedDimensions\":[\"implementationCompleteness\",\"extensibility\",\"reliability\",\"security\"],\"expectedScoreGain\":5,\"expectedConfidenceGain\":0.08,\"rationale\":\"LLM_CONTEXT は Codex-first judge と未実装 adapter の扱いを重視しているが、今回の sourceFiles 抜粋には `api/modules/llm/judge-client.ts` が含まれていない。中核外部境界の確認不足が評価信頼度を下げている。\"},{\"title\":\"CLI/API/UI のサンプル出力を保存してレビュー可能にする\",\"kind\":\"runtime-gap\",\"affectedDimensions\":[\"agentUsability\",\"ossProductValue\",\"reliability\",\"testability\"],\"expectedScoreGain\":4,\"expectedConfidenceGain\":0.07,\"rationale\":\"verify は成功しているが、bundle の inspectedInputs では appLaunched と sampleOutputReviewed が false。coding agents 向け製品としては、実際の評価 JSON、改善依頼、UI 表示のサンプルが価値判断に必要。\"},{\"title\":\"評価対象 rootPath とファイルアクセス境界の安全性を確認する\",\"kind\":\"evidence-gap\",\"affectedDimensions\":[\"security\",\"reliability\"],\"expectedScoreGain\":3,\"expectedConfidenceGain\":0.05,\"rationale\":\"認証や cookie の基本実装は確認できたが、任意 project path を読む評価サービスとしての path 境界、秘密情報除外、LLM 送信内容の制御は抜粋だけでは十分確認できない。\"},{\"title\":\"bundle-builder の責務を evidence collector と prompt context builder に分ける\",\"kind\":\"implementation-gap\",\"affectedDimensions\":[\"architectureQuality\",\"maintainability\",\"extensibility\"],\"expectedScoreGain\":3,\"expectedConfidenceGain\":0.04,\"rationale\":\"bundle-builder は tree 収集、source 選定、検証実行、notVerified 構築まで担っている。MVP では成立しているが、今後 runtime verification や audit-grade evidence を追加すると責務が膨らみやすい。\"}],\"sourceInspections\":[{\"checkId\":\"entrypoint-flow\",\"title\":\"主要ワークフローへの実行経路\",\"status\":\"passed\",\"files\":[\"api/cli/evaluate.ts\",\"api/cli/bundle.ts\",\"api/cli/evaluator-runtime.ts\",\"api/modules/evaluations/evaluation.service.ts\",\"api/app/server.ts\",\"web/src/App.tsx\",\"web/src/main.tsx\"],\"findings\":[\"CLI の evaluate/bundle は共通 runtime から ProjectService と EvaluationService を組み立て、中核 usecase に接続している。\",\"server entrypoint は Hono app を Bun.serve に渡し、shutdown 時に DB 接続を閉じる経路を持つ。\",\"React entrypoint は router と query client を構成しているが、評価 UI の詳細画面は今回の sourceFiles 抜粋では確認していない。\"],\"evidenceRefs\":[\"api/cli/evaluate.ts\",\"api/cli/bundle.ts\",\"api/cli/evaluator-runtime.ts\",\"api/modules/evaluations/evaluation.service.ts\",\"api/app/server.ts\",\"web/src/App.tsx\",\"web/src/main.tsx\"]},{\"checkId\":\"domain-logic\",\"title\":\"対象プロジェクトの中核ロジック\",\"status\":\"passed\",\"files\":[\"api/modules/evaluations/bundle-builder.ts\",\"api/modules/evaluations/evaluation.service.ts\",\"api/modules/evaluations/improvement-generator.ts\",\"api/cli/evaluator-runtime.ts\"],\"findings\":[\"EvaluationService が profile 読み込み、前回評価取得、bundle 生成、judge 実行、保存、改善依頼生成を一つの主経路として束ねている。\",\"improvement-generator は gap を taskType、prompt、acceptanceCriteria、verificationCommands へ変換し、評価から次改善へつなげている。\",\"bundle-builder は source inspection plan と sourceFiles を構築しているが、README の baseline Evidence Policy と verify 実行の挙動に不整合がある。\"],\"evidenceRefs\":[\"api/modules/evaluations/evaluation.service.ts\",\"api/modules/evaluations/improvement-generator.ts\",\"api/modules/evaluations/bundle-builder.ts\",\"README.md\",\"LLM_CONTEXT.md\"]},{\"checkId\":\"data-persistence\",\"title\":\"状態管理と再現性\",\"status\":\"passed\",\"files\":[\"api/db/schema.ts\",\"api/db/index.ts\",\"api/modules/evaluations/evaluation.repository.ts\",\"api/modules/projects/project.repository.ts\"],\"findings\":[\"projectProfiles、evaluationBundles、projectEvaluations、improvementRequests、evaluationActivityEvents が schema として定義され、履歴と改善依頼の保存先がある。\",\"createEvaluationRun は bundle、evaluation、improvements、activity events を transaction で保存している。\",\"JSON text 保存は MVP として妥当だが、後で横断集計する場合は一部正規化が必要になる。\"],\"evidenceRefs\":[\"api/db/schema.ts\",\"api/modules/evaluations/evaluation.repository.ts\",\"api/modules/projects/project.repository.ts\",\"api/db/index.ts\"]},{\"checkId\":\"external-boundary\",\"title\":\"外部境界と失敗時挙動\",\"status\":\"partial\",\"files\":[\"api/cli/auth-create-admin.ts\",\"api/middleware/auth.ts\",\"api/modules/auth/auth-cookies.ts\",\"api/modules/auth/auth.service.ts\",\"api/db/index.ts\",\"api/cli/migrate.ts\"],\"findings\":[\"認証 middleware は Bearer/cookie token を検証し、非 active user を拒否している。\",\"auth cookie は httpOnly、secure、sameSite、path を設定しており、refresh cookie は `/api/auth` に限定している。\",\"SQLite 接続は network database URL を拒否する。\",\"評価の最重要外部境界である Codex/LLM judge client は今回の sourceFiles 抜粋に含まれず、provider 失敗時挙動は部分確認に留まる。\"],\"evidenceRefs\":[\"api/middleware/auth.ts\",\"api/modules/auth/auth-cookies.ts\",\"api/modules/auth/auth.service.ts\",\"api/db/index.ts\",\"api/cli/migrate.ts\"]},{\"checkId\":\"verification-signal\",\"title\":\"検証可能性\",\"status\":\"passed\",\"files\":[\"web/src/App.tsx\",\"web/src/main.tsx\",\"api/cli/evaluator-runtime.ts\"],\"findings\":[\"`bun run verify` が typecheck、lint、format、test、build をすべて成功させている。\",\"package scripts に個別検証コマンドと verify が定義されている。\",\"repoTree には service、route、auth、llm 周辺の test files が多数あり、検証文化は強い。\"],\"evidenceRefs\":[\"verificationRuns.verify\",\"package.json\",\"repoTree\"]},{\"checkId\":\"agent-output-contract\",\"title\":\"利用者へ渡る操作・出力契約\",\"status\":\"partial\",\"files\":[\"api/cli/evaluator-runtime.ts\",\"api/modules/evaluations/improvement-generator.ts\",\"api/modules/evaluations/evaluation.repository.ts\",\"api/db/schema.ts\"],\"findings\":[\"CLI は JSON 出力と人間向け出力を分け、score、confidence、verification runs、source checks、top gaps、next improvements を表示する。\",\"改善依頼は gap 由来の prompt、acceptance criteria、verification commands を持ち、coding agents が次タスクへ移りやすい。\",\"sampleOutputReviewed が false のため、実際の出力が agent にとって十分読みやすいかは未確認。\"],\"evidenceRefs\":[\"api/cli/evaluator-runtime.ts\",\"api/modules/evaluations/improvement-generator.ts\",\"api/modules/evaluations/evaluation.repository.ts\",\"api/db/schema.ts\",\"inspectedInputs.sampleOutputReviewed\"]}],\"notVerified\":[\"アプリサーバーを実際に起動して API/UI を操作する確認。\",\"`api/modules/llm/judge-client.ts` の Codex SDK 境界、未実装 provider の失敗挙動、raw output handling。\",\"CLI の `evaluator:evaluate --json` と `evaluator:reevaluate --json` の実サンプル出力品質。\",\"ソースコード全量の監査、特に path 読み取り、秘密情報除外、LLM 送信データ制御。\",\"監査級のセキュリティ挙動。\",\"AGENTS.md は missingInputs で未確認。\"],\"nextEvidenceToCollect\":[\"一時 SQLite DB で migration から `evaluator:evaluate --json`、`evaluator:reevaluate --json` まで実行し、成果物 JSON を保存する。\",\"Hono `app.request` で project 作成、evaluation 実行、latest/improvements 取得の API サンプルを確認する。\",\"`api/modules/llm/judge-client.ts` とその test を source inspection 対象に追加し、provider 失敗時の出力契約を確認する。\",\"UI を起動して Home/Settings の評価ワークフローを操作し、スクリーンショットまたは DOM レベルで確認する。\",\"Evidence Policy を更新するか、baseline 評価で verify を実行しない構成へ分けたうえで、bundle の evidenceLevel と notVerified の意味を再確認する。\"]}"
+          }
+        }
+      },
+      "message": "Codex assistant response completed.",
+      "status": "item.completed"
+    },
+    {
+      "id": "fcab4938-7ead-456c-9c66-08d722fa67b2",
+      "seq": 14,
+      "createdAt": "2026-06-28T05:59:19.027Z",
+      "phase": "judge",
+      "level": "checkpoint",
+      "source": "codex",
+      "payload": {
+        "usage": {
+          "inputTokens": 246346,
+          "cachedInputTokens": 193024,
+          "outputTokens": 6046,
+          "reasoningOutputTokens": 1630
+        },
+        "providerEvent": {
+          "type": "turn.completed",
+          "usage": {
+            "input_tokens": "[REDACTED]",
+            "cached_input_tokens": "[REDACTED]",
+            "output_tokens": "[REDACTED]",
+            "reasoning_output_tokens": "[REDACTED]"
+          }
+        }
+      },
+      "message": "Codex turn completed.",
+      "status": "completed"
+    },
+    {
+      "id": "bad82a99-d187-4330-bdf3-180a08bf735c",
+      "seq": 15,
+      "createdAt": "2026-06-28T05:59:19.155Z",
+      "phase": "save",
+      "level": "info",
+      "source": "evaluator",
+      "message": "Saving evaluation and generated improvement requests."
+    },
+    {
+      "id": "fd2d1270-6492-4f51-8d78-a0e0e0bc0972",
+      "seq": 16,
+      "createdAt": "2026-06-28T05:59:19.162Z",
+      "phase": "complete",
+      "level": "checkpoint",
+      "source": "evaluator",
+      "message": "Evaluation complete: 82 / 100.",
+      "payload": {
+        "evaluationId": "a7e074d4-09ef-43f1-bbb0-b8904001a8d2",
+        "score": 82,
+        "confidence": 0.82
+      }
+    }
+  ],
+  "judgeRun": {
+    "judge": "codex-agent",
+    "status": "completed",
+    "model": "gpt-5.5",
+    "mode": "review-only",
+    "threadId": "019f0ccd-812d-7dd3-bab9-74264a8c4df4",
+    "usage": {
+      "input_tokens": 246346,
+      "cached_input_tokens": 193024,
+      "output_tokens": 6046,
+      "reasoning_output_tokens": 1630
+    }
+  }
+}

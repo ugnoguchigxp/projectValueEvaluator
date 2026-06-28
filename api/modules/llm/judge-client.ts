@@ -1,298 +1,808 @@
 import { randomUUID } from "node:crypto";
 import {
+	Codex,
+	type ThreadEvent,
+	type ThreadItem,
+	type Usage,
+} from "@openai/codex-sdk";
+import {
+	type CodexMode,
+	defaultBaselinePrompt,
+	evaluationDeltaSchema,
+	focusedImprovementIdeasResultSchema,
+	projectEvaluationReportSchema,
 	projectValueEvaluationSchema,
-	type DimensionScore,
 	type EvaluationBundle,
-	type Gap,
+	type EvaluationDelta,
+	type FocusedImprovementIdea,
+	type JudgeRun,
+	type JudgeSelection,
+	type ProjectEvaluationReport,
 	type ProjectValueEvaluation,
 } from "../../../shared/schemas/evaluation.schema";
-import type {
-	EvaluationDimensionKey,
-	ProjectProfile,
+import {
+	defaultEvaluationDimensions,
+	evaluationDimensionLabels,
+	type EvaluationDimensionKey,
+	type ProjectProfile,
 } from "../../../shared/schemas/project.schema";
-import { clampConfidence, clampScore } from "../evaluations/score-utils";
+import { HttpError } from "../auth/errors";
+import type { EvaluationActivityEmitter } from "../evaluations/evaluation.service";
 
-const dimensionLabels: Record<EvaluationDimensionKey, string> = {
-	conceptValue: "Concept Value",
-	implementationCompleteness: "Implementation Completeness",
-	architectureQuality: "Architecture Quality",
-	maintainability: "Maintainability",
-	security: "Security",
-	testability: "Testability",
-	documentation: "Documentation",
-	agentUsability: "Agent Usability",
-	extensibility: "Extensibility",
-	reliability: "Reliability",
-	strategicFit: "Strategic Fit",
-	ossProductValue: "OSS / Product Value",
+export const defaultCodexJudgeSelection: Extract<
+	JudgeSelection,
+	{ type: "codex-agent" }
+> = {
+	type: "codex-agent",
+	model: "gpt-5.5",
+	mode: "review-only",
 };
 
-const hasScript = (bundle: EvaluationBundle, script: string): boolean =>
-	Object.hasOwn(bundle.inputs.scripts, script);
+const SECRET_KEY_PATTERN =
+	/(authorization|cookie|token|secret|api[_-]?key|password)/i;
 
-const treeHas = (bundle: EvaluationBundle, prefix: string): boolean =>
-	bundle.inputs.repoTree.some((entry) => entry.startsWith(prefix));
+function redactProviderEvent(value: unknown): unknown {
+	if (Array.isArray(value))
+		return value.map((item) => redactProviderEvent(item));
+	if (!value || typeof value !== "object") return value;
+	const redacted: Record<string, unknown> = {};
+	for (const [key, child] of Object.entries(value)) {
+		redacted[key] = SECRET_KEY_PATTERN.test(key)
+			? "[REDACTED]"
+			: redactProviderEvent(child);
+	}
+	return redacted;
+}
 
-const textIncludes = (
-	value: string | undefined,
-	patterns: string[],
-): boolean => {
-	const lower = value?.toLowerCase() ?? "";
-	return patterns.some((pattern) => lower.includes(pattern.toLowerCase()));
-};
-
-function dimensionScore(
-	key: EvaluationDimensionKey,
-	project: ProjectProfile,
-	bundle: EvaluationBundle,
-): DimensionScore {
-	const docs = [
-		bundle.inspectedInputs.readme,
-		bundle.inspectedInputs.llmContext,
-		bundle.inspectedInputs.agents,
-	].filter(Boolean).length;
-	const scripts = bundle.inputs.scripts;
-	const hasTests =
-		hasScript(bundle, "test") ||
-		bundle.inputs.repoTree.some((p) => p.includes(".test."));
-	const hasVerify = hasScript(bundle, "verify");
-	const hasBuild = hasScript(bundle, "build") || hasScript(bundle, "build:web");
-	const hasApi = treeHas(bundle, "api/");
-	const hasShared = treeHas(bundle, "shared/");
-	const hasDb = treeHas(bundle, "drizzle/") || treeHas(bundle, "api/db/");
-	const hasSpec = treeHas(bundle, "spec/");
-	const hasSecuritySignals =
-		textIncludes(bundle.inputs.readme, ["security", "セキュリティ"]) ||
-		textIncludes(bundle.inputs.llmContext, ["security", "auth", "cookie"]);
-	const scriptCount = Object.keys(scripts).length;
-
-	const baseScores: Record<EvaluationDimensionKey, number> = {
-		conceptValue:
-			60 + (bundle.inspectedInputs.readme ? 12 : 0) + (project.ideal ? 16 : 0),
-		implementationCompleteness:
-			45 +
-			(hasApi ? 12 : 0) +
-			(hasShared ? 8 : 0) +
-			(hasDb ? 8 : 0) +
-			Math.min(scriptCount, 8),
-		architectureQuality:
-			48 +
-			(hasApi ? 10 : 0) +
-			(hasShared ? 10 : 0) +
-			(hasDb ? 8 : 0) +
-			(hasSpec ? 8 : 0),
-		maintainability:
-			50 +
-			Math.min(bundle.inputs.repoTree.length / 24, 12) +
-			(hasVerify ? 10 : 0),
-		security: 48 + (hasSecuritySignals ? 14 : 0) + (hasDb ? 6 : 0),
-		testability: 45 + (hasTests ? 18 : 0) + (hasVerify ? 10 : 0),
-		documentation: 42 + docs * 12 + (hasSpec ? 10 : 0),
-		agentUsability:
-			45 +
-			(bundle.inspectedInputs.llmContext ? 16 : 0) +
-			(bundle.inspectedInputs.agents ? 10 : 0) +
-			(hasVerify ? 8 : 0),
-		extensibility:
-			50 + (hasApi ? 8 : 0) + (hasShared ? 8 : 0) + (hasSpec ? 8 : 0),
-		reliability:
-			45 + (hasVerify ? 12 : 0) + (hasTests ? 10 : 0) + (hasBuild ? 8 : 0),
-		strategicFit:
-			55 +
-			(textIncludes(project.ideal, ["agent", "AI", "LLM"]) ? 12 : 0) +
-			(bundle.inspectedInputs.llmContext ? 8 : 0),
-		ossProductValue:
-			45 +
-			(bundle.inspectedInputs.readme ? 14 : 0) +
-			(hasScript(bundle, "dev") ? 6 : 0) +
-			(hasBuild ? 6 : 0),
+function activityForCodexEvent(
+	event: ThreadEvent,
+): Parameters<EvaluationActivityEmitter>[0] {
+	const base = {
+		phase: "judge",
+		level: "debug" as const,
+		source: "codex",
+		payload: { providerEvent: redactProviderEvent(event) },
 	};
 
-	const confidenceBase: Record<EvaluationDimensionKey, number> = {
-		conceptValue: 0.76,
-		implementationCompleteness: 0.6,
-		architectureQuality: 0.62,
-		maintainability: 0.58,
-		security: 0.42,
-		testability: 0.48,
-		documentation: 0.74,
-		agentUsability: 0.68,
-		extensibility: 0.58,
-		reliability: 0.36,
-		strategicFit: 0.64,
-		ossProductValue: 0.62,
-	};
+	if (event.type === "thread.started") {
+		return {
+			...base,
+			level: "checkpoint",
+			message: `Codex thread started: ${event.thread_id}.`,
+			status: "started",
+		};
+	}
+	if (event.type === "turn.started") {
+		return {
+			...base,
+			level: "info",
+			message: "Codex turn started.",
+			status: "started",
+		};
+	}
+	if (event.type === "turn.completed") {
+		return {
+			...base,
+			level: "checkpoint",
+			message: "Codex turn completed.",
+			status: "completed",
+			payload: {
+				usage: normalizeUsage(event.usage),
+				providerEvent: redactProviderEvent(event),
+			},
+		};
+	}
+	if (event.type === "turn.failed") {
+		return {
+			...base,
+			level: "error",
+			message: `Codex turn failed: ${event.error.message}`,
+			status: "failed",
+		};
+	}
+	if (event.type === "error") {
+		return {
+			...base,
+			level: "error",
+			message: `Codex stream error: ${event.message}`,
+			status: "failed",
+		};
+	}
 
-	const evidenceRefs = [
-		bundle.inspectedInputs.readme ? "README.md" : undefined,
-		bundle.inspectedInputs.llmContext ? "LLM_CONTEXT.md" : undefined,
-		bundle.inspectedInputs.agents ? "AGENTS.md" : undefined,
-		bundle.inspectedInputs.packageJson ? "package.json" : undefined,
-		bundle.inspectedInputs.repoTree ? "repo tree" : undefined,
-	].filter((value): value is string => Boolean(value));
-
-	const caveats =
-		key === "security" || key === "reliability"
-			? ["Runtime behavior and implementation-level audit were not verified."]
-			: ["Evaluation is based on surface and repository-structure evidence."];
-
+	const item = event.item;
+	if (item.type === "agent_message") {
+		return {
+			...base,
+			level: event.type === "item.completed" ? "checkpoint" : "debug",
+			message:
+				event.type === "item.completed"
+					? "Codex assistant response completed."
+					: "Codex assistant response updated.",
+			status: event.type,
+			payload: {
+				itemType: item.type,
+				text: item.text,
+				providerEvent: redactProviderEvent(event),
+			},
+		};
+	}
+	if (item.type === "command_execution") {
+		return {
+			...base,
+			level: "info",
+			message: `Codex command ${event.type}: ${item.command}`,
+			status: item.status,
+			payload: {
+				itemType: item.type,
+				command: item.command,
+				status: item.status,
+				exitCode: item.exit_code,
+				aggregatedOutput: item.aggregated_output,
+				providerEvent: redactProviderEvent(event),
+			},
+		};
+	}
+	if (item.type === "mcp_tool_call") {
+		return {
+			...base,
+			level: "info",
+			message: `Codex MCP tool ${event.type}: ${item.server}.${item.tool}`,
+			status: item.status,
+			payload: {
+				itemType: item.type,
+				server: item.server,
+				tool: item.tool,
+				arguments: redactProviderEvent(item.arguments),
+				result: redactProviderEvent(item.result),
+				error: item.error?.message,
+				status: item.status,
+				providerEvent: redactProviderEvent(event),
+			},
+		};
+	}
+	if (item.type === "file_change") {
+		return {
+			...base,
+			level: "info",
+			message: `Codex file change ${item.status}: ${item.changes.length} file(s).`,
+			status: item.status,
+			payload: {
+				itemType: item.type,
+				changes: redactProviderEvent(item.changes),
+				providerEvent: redactProviderEvent(event),
+			},
+		};
+	}
 	return {
-		key,
-		score: clampScore(baseScores[key]),
-		confidence: clampConfidence(
-			confidenceBase[key] + Math.min(docs * 0.025, 0.08),
+		...base,
+		message: `Codex activity ${event.type}: ${item.type}.`,
+		status: event.type,
+	};
+}
+
+function normalizeUsage(usage: Usage | null) {
+	if (!usage) return null;
+	return {
+		inputTokens: usage.input_tokens,
+		cachedInputTokens: usage.cached_input_tokens,
+		outputTokens: usage.output_tokens,
+		reasoningOutputTokens: usage.reasoning_output_tokens,
+	};
+}
+
+const dimensionKeys = [...defaultEvaluationDimensions];
+const codexJudgeTimeoutMs = 300_000;
+
+const codexOutputJsonSchema = {
+	type: "object",
+	additionalProperties: false,
+	required: [
+		"schemaVersion",
+		"baselinePrompt",
+		"judge",
+		"overallScore",
+		"confidence",
+		"summary",
+		"dimensions",
+		"strengths",
+		"weaknesses",
+	],
+	properties: {
+		schemaVersion: { type: "string", enum: ["project-evaluation-report/v1"] },
+		baselinePrompt: { type: "string", minLength: 1 },
+		judge: {
+			type: "object",
+			additionalProperties: false,
+			required: ["provider", "model", "mode"],
+			properties: {
+				provider: { type: "string", enum: ["codex"] },
+				model: { type: "string" },
+				mode: { type: "string" },
+			},
+		},
+		overallScore: { type: "number", minimum: 0, maximum: 100 },
+		confidence: { type: "number", minimum: 0, maximum: 1 },
+		summary: { type: "string", minLength: 1 },
+		dimensions: {
+			type: "array",
+			minItems: 1,
+			items: {
+				type: "object",
+				additionalProperties: false,
+				required: [
+					"key",
+					"label",
+					"score",
+					"confidence",
+					"rationale",
+					"evidence",
+					"concerns",
+				],
+				properties: {
+					key: { type: "string", enum: dimensionKeys },
+					label: { type: "string", minLength: 1 },
+					score: { type: "number", minimum: 0, maximum: 100 },
+					confidence: { type: "number", minimum: 0, maximum: 1 },
+					rationale: { type: "string", minLength: 1 },
+					evidence: {
+						type: "array",
+						items: { type: "string" },
+					},
+					concerns: {
+						type: "array",
+						items: { type: "string" },
+					},
+				},
+			},
+		},
+		strengths: {
+			type: "array",
+			items: { type: "string" },
+		},
+		weaknesses: {
+			type: "array",
+			items: { type: "string" },
+		},
+	},
+};
+
+const focusedImprovementIdeasOutputJsonSchema = {
+	type: "object",
+	additionalProperties: false,
+	required: ["schemaVersion", "ideas"],
+	properties: {
+		schemaVersion: {
+			type: "string",
+			enum: ["focused-improvement-ideas/v1"],
+		},
+		ideas: {
+			type: "array",
+			minItems: 1,
+			maxItems: 5,
+			items: {
+				type: "object",
+				additionalProperties: false,
+				required: [
+					"title",
+					"targetDimensions",
+					"summary",
+					"detailedPlan",
+					"implementationSteps",
+					"filesToInspect",
+					"acceptanceCriteria",
+					"verificationCommands",
+					"expectedImpact",
+					"risks",
+				],
+				properties: {
+					title: { type: "string", minLength: 1 },
+					targetDimensions: {
+						type: "array",
+						minItems: 1,
+						items: { type: "string", enum: dimensionKeys },
+					},
+					summary: { type: "string", minLength: 1 },
+					detailedPlan: { type: "string", minLength: 1 },
+					implementationSteps: {
+						type: "array",
+						minItems: 1,
+						items: { type: "string", minLength: 1 },
+					},
+					filesToInspect: {
+						type: "array",
+						items: { type: "string", minLength: 1 },
+					},
+					acceptanceCriteria: {
+						type: "array",
+						minItems: 1,
+						items: { type: "string", minLength: 1 },
+					},
+					verificationCommands: {
+						type: "array",
+						minItems: 1,
+						items: { type: "string", minLength: 1 },
+					},
+					expectedImpact: { type: "string", minLength: 1 },
+					risks: {
+						type: "array",
+						items: { type: "string", minLength: 1 },
+					},
+				},
+			},
+		},
+	},
+};
+
+function modeInstruction(mode: CodexMode): string {
+	if (mode === "improvement-request") {
+		return "ギャップを実装可能な改善依頼へ変換することに集中してください。ファイルは変更しないでください。";
+	}
+	if (mode === "reevaluation") {
+		return "前回評価からのスコアと信頼度の差分に集中してください。ファイルは変更しないでください。";
+	}
+	return "レビューのみ行ってください。bundle を評価し、ファイルは変更しないでください。";
+}
+
+function createCodexPrompt(params: {
+	project: ProjectProfile;
+	bundle: EvaluationBundle;
+	previousEvaluation?: ProjectValueEvaluation | null;
+	mode: CodexMode;
+}): string {
+	const promptContext =
+		params.bundle.inputs.promptContext ??
+		({
+			schemaVersion: "evaluation-prompt-context/v1",
+			baselinePrompt: defaultBaselinePrompt,
+			projectName: params.project.name,
+			projectRoot: params.bundle.projectRoot,
+			projectIdeal: params.project.ideal,
+			primaryAudience: params.project.primaryAudience,
+			targetWorkflow: params.project.targetWorkflow,
+			nonGoals: params.project.nonGoals,
+			dimensions: params.project.dimensions.map((key) => ({
+				key,
+				label: evaluationDimensionLabels[key],
+			})),
+			judgeSettings: {
+				provider: "codex",
+				model: "gpt-5.5",
+				codexMode: params.mode,
+				status: "ready",
+			},
+			inputs: {
+				readme: params.bundle.inputs.readme,
+				llmContext: params.bundle.inputs.llmContext,
+				agents: params.bundle.inputs.agents,
+				packageJson: params.bundle.inputs.packageJson,
+				repoTree: params.bundle.inputs.repoTree,
+				scripts: params.bundle.inputs.scripts,
+			},
+		} as const);
+	return [
+		"提供された出力スキーマに一致する JSON だけを返してください。",
+		modeInstruction(params.mode),
+		`評価対象ディレクトリ: ${params.bundle.projectRoot}`,
+		`評価対象プロジェクト名: ${promptContext.projectName}`,
+		"この ProjectValueEvaluator 実行環境は評価器であり、評価対象ではありません。評価対象は EvaluationPromptContext.projectRoot / projectName のプロジェクトだけです。",
+		"projectIdeal が評価対象名や repository 内容と矛盾する場合は、projectRoot の README、package metadata、repoTree、baselinePrompt を優先してください。",
+		"baselinePrompt を評価依頼の中心として扱ってください。",
+		"overallScore と各 dimensions.score を 0-100 で評点してください。",
+		"前回評価がある場合でも、比較は補助情報として扱い、今回の評点を独立して出してください。",
+		"追加のコマンド実行は必須ではありません。まず提供された EvaluationPromptContext から簡潔に評価してください。",
+		"weaknesses は最大 6 件にしてください。",
+		"summary、rationale、strengths、weaknesses は日本語で書いてください。",
+		"",
+		"EvaluationPromptContext:",
+		JSON.stringify(promptContext, null, 2),
+	].join("\n");
+}
+
+function createFocusedImprovementIdeasPrompt(params: {
+	project: ProjectProfile;
+	bundle: EvaluationBundle;
+	evaluation: ProjectValueEvaluation;
+	dimensionKeys: EvaluationDimensionKey[];
+}): string {
+	const promptContext = params.bundle.inputs.promptContext;
+	const selectedDimensionSet = new Set(params.dimensionKeys);
+	const selectedDimensions = (
+		params.evaluation.report?.dimensions ?? params.evaluation.dimensions
+	).filter((dimension) => selectedDimensionSet.has(dimension.key));
+	const evaluationSnapshot = {
+		evaluationId: params.evaluation.id,
+		bundleId: params.evaluation.bundleId,
+		createdAt: params.evaluation.createdAt,
+		score: params.evaluation.score,
+		confidence: params.evaluation.overallConfidence,
+		summary: params.evaluation.summary,
+		strengths: params.evaluation.strengths,
+		weaknesses: params.evaluation.report?.weaknesses,
+		selectedDimensions,
+		delta: params.evaluation.delta,
+	};
+	return [
+		"提供された出力スキーマに一致する JSON だけを返してください。",
+		"保存済み評価セッションと EvaluationPromptContext を引き継ぎ、選択された評価軸だけを対象に改善案を生成してください。",
+		"ファイルは変更しないでください。必要なら読むだけにしてください。",
+		"改善案は抽象論にせず、どの順序で何を変更し、何を検証するかが分かる詳細な内容にしてください。",
+		"targetDimensions には、依頼された selectedDimensionKeys の中に含まれる key だけを入れてください。未選択の評価軸は対象に含めないでください。",
+		"implementationSteps、acceptanceCriteria、verificationCommands は具体的に書いてください。",
+		"title、summary、detailedPlan、implementationSteps、acceptanceCriteria、expectedImpact、risks は日本語で書いてください。",
+		`評価対象ディレクトリ: ${params.bundle.projectRoot}`,
+		`評価対象プロジェクト名: ${promptContext?.projectName ?? params.project.name}`,
+		"",
+		"selectedDimensionKeys:",
+		JSON.stringify(params.dimensionKeys, null, 2),
+		"",
+		"EvaluationPromptContext:",
+		JSON.stringify(promptContext ?? params.bundle.inputs, null, 2),
+		"",
+		"SavedEvaluationSession:",
+		JSON.stringify(evaluationSnapshot, null, 2),
+	].join("\n");
+}
+
+function parseJsonFromCodexResponse(value: string): unknown {
+	try {
+		return JSON.parse(value);
+	} catch {
+		const fenced = value.match(/```(?:json)?\s*([\s\S]*?)```/);
+		if (fenced?.[1]) {
+			return JSON.parse(fenced[1]);
+		}
+		const start = value.indexOf("{");
+		const end = value.lastIndexOf("}");
+		if (start >= 0 && end > start) {
+			return JSON.parse(value.slice(start, end + 1));
+		}
+		throw new Error("Codex did not return parseable JSON.");
+	}
+}
+
+function computeDelta(params: {
+	report: ProjectEvaluationReport;
+	previousEvaluation?: ProjectValueEvaluation | null;
+}): EvaluationDelta | undefined {
+	const previous = params.previousEvaluation;
+	if (!previous) return undefined;
+	const previousScore = previous.report?.overallScore ?? previous.score;
+	const previousConfidence =
+		previous.report?.confidence ?? previous.overallConfidence;
+	const previousDimensions = new Map(
+		(previous.report?.dimensions ?? previous.dimensions).map((dimension) => [
+			dimension.key,
+			dimension.score,
+		]),
+	);
+	const previousWeaknesses = new Set(
+		previous.report?.weaknesses ?? previous.gapsTo100.map((gap) => gap.title),
+	);
+	const currentWeaknesses = new Set(params.report.weaknesses);
+	return evaluationDeltaSchema.parse({
+		previousEvaluationId: previous.id,
+		scoreDelta: params.report.overallScore - previousScore,
+		confidenceDelta: Number(
+			(params.report.confidence - previousConfidence).toFixed(3),
 		),
-		rationale: `${dimensionLabels[key]} was evaluated from ${evidenceRefs.join(", ")}.`,
-		evidenceRefs,
-		caveats,
-	};
+		dimensionDeltas: params.report.dimensions
+			.filter((dimension) => previousDimensions.has(dimension.key))
+			.map((dimension) => {
+				const previousDimensionScore =
+					previousDimensions.get(dimension.key) ?? 0;
+				return {
+					key: dimension.key,
+					previousScore: previousDimensionScore,
+					currentScore: dimension.score,
+					delta: dimension.score - previousDimensionScore,
+				};
+			}),
+		newWeaknesses: params.report.weaknesses.filter(
+			(weakness) => !previousWeaknesses.has(weakness),
+		),
+		resolvedWeaknesses: [...previousWeaknesses].filter(
+			(weakness) => !currentWeaknesses.has(weakness),
+		),
+	});
 }
 
-function createGaps(bundle: EvaluationBundle): Gap[] {
-	const gaps: Gap[] = [];
-	const addGap = (gap: Omit<Gap, "id" | "currentEvidenceLevel">) => {
-		gaps.push({
-			id: randomUUID(),
-			currentEvidenceLevel: bundle.evidenceLevel,
-			...gap,
-		});
-	};
-
-	if (!bundle.inspectedInputs.readme) {
-		addGap({
-			title: "README が評価 bundle に含まれていない",
-			kind: "documentation-gap",
-			affectedDimensions: ["conceptValue", "documentation", "ossProductValue"],
-			expectedScoreGain: 4,
-			expectedConfidenceGain: 0.08,
-			rationale:
-				"Project purpose and usage cannot be evaluated confidently without README.md.",
-		});
-	}
-	if (!bundle.inspectedInputs.llmContext) {
-		addGap({
-			title: "LLM_CONTEXT が評価 bundle に含まれていない",
-			kind: "documentation-gap",
-			affectedDimensions: ["agentUsability", "architectureQuality"],
-			expectedScoreGain: 3,
-			expectedConfidenceGain: 0.08,
-			rationale: "Agent-facing architecture and workflow context is missing.",
-		});
-	}
-	if (!hasScript(bundle, "verify")) {
-		addGap({
-			title: "統合 verify コマンドが確認できない",
-			kind: "evidence-gap",
-			affectedDimensions: ["testability", "reliability", "agentUsability"],
-			expectedScoreGain: 3,
-			expectedConfidenceGain: 0.1,
-			rationale:
-				"Agents need a single verification gate to confirm improvements.",
-		});
-	}
-	if (!bundle.inspectedInputs.testsExecuted) {
-		addGap({
-			title: "テスト実行結果が未確認",
-			kind: "runtime-gap",
-			affectedDimensions: ["testability", "reliability"],
-			expectedScoreGain: 0,
-			expectedConfidenceGain: 0.16,
-			rationale:
-				"Score is provisional until tests or equivalent verification commands are executed.",
-		});
-	}
-	if (!bundle.inspectedInputs.sampleOutputReviewed) {
-		addGap({
-			title: "sample evaluation output が未確認",
-			kind: "value-gap",
-			affectedDimensions: [
-				"ossProductValue",
-				"agentUsability",
-				"documentation",
-			],
-			expectedScoreGain: 4,
-			expectedConfidenceGain: 0.06,
-			rationale:
-				"A sample output makes the value and downstream handoff easier to inspect.",
-		});
-	}
-	return gaps;
+function reportToEvaluation(params: {
+	project: ProjectProfile;
+	bundle: EvaluationBundle;
+	report: ProjectEvaluationReport;
+	delta?: EvaluationDelta;
+	previousEvaluation?: ProjectValueEvaluation | null;
+}): ProjectValueEvaluation {
+	const previousScore = params.previousEvaluation?.score;
+	const previousConfidence = params.previousEvaluation?.overallConfidence;
+	return projectValueEvaluationSchema.parse({
+		id: randomUUID(),
+		projectId: params.project.id,
+		bundleId: params.bundle.id,
+		score: params.report.overallScore,
+		idealScore: 100,
+		overallConfidence: params.report.confidence,
+		evidenceLevel: params.bundle.evidenceLevel,
+		summary: params.report.summary,
+		dimensions: params.report.dimensions.map((dimension) => ({
+			key: dimension.key,
+			score: dimension.score,
+			confidence: dimension.confidence,
+			rationale: dimension.rationale,
+			evidenceRefs: dimension.evidence,
+			caveats: dimension.concerns,
+		})),
+		strengths: params.report.strengths,
+		gapsTo100: [],
+		sourceInspections: [],
+		notVerified: [],
+		nextEvidenceToCollect: [],
+		previousScore,
+		scoreDelta:
+			previousScore === undefined
+				? undefined
+				: params.report.overallScore - previousScore,
+		previousConfidence,
+		confidenceDelta:
+			previousConfidence === undefined
+				? undefined
+				: Number((params.report.confidence - previousConfidence).toFixed(3)),
+		baselinePrompt: params.report.baselinePrompt,
+		judgeSettings: params.bundle.inputs.promptContext?.judgeSettings,
+		report: params.report,
+		delta: params.delta,
+		createdAt: new Date().toISOString(),
+	});
 }
 
-function nextEvidence(bundle: EvaluationBundle): string[] {
-	const items = [
-		"Run typecheck, tests, and build; attach command outcomes to the next evaluation.",
-		"Review the core implementation files for the evaluation pipeline.",
-		"Generate and inspect a sample evaluation report.",
-	];
-	if (bundle.missingInputs.length > 0) {
-		items.unshift(
-			`Resolve missing inputs: ${bundle.missingInputs.join(", ")}.`,
+async function judgeProjectValueWithCodex(params: {
+	project: ProjectProfile;
+	bundle: EvaluationBundle;
+	previousEvaluation?: ProjectValueEvaluation | null;
+	judge: Extract<JudgeSelection, { type: "codex-agent" }>;
+	emitActivity?: EvaluationActivityEmitter;
+}): Promise<{
+	evaluation: ProjectValueEvaluation;
+	rawOutput: unknown;
+	judgeRun: JudgeRun;
+}> {
+	try {
+		const abortController = new AbortController();
+		const timeout = setTimeout(() => {
+			abortController.abort();
+		}, codexJudgeTimeoutMs);
+		const codex = new Codex();
+		const thread = codex.startThread({
+			model: params.judge.model,
+			workingDirectory: params.bundle.projectRoot,
+			sandboxMode: "read-only",
+			approvalPolicy: "never",
+			skipGitRepoCheck: true,
+			networkAccessEnabled: false,
+			webSearchMode: "disabled",
+		});
+		const streamed = await thread.runStreamed(
+			createCodexPrompt({
+				project: params.project,
+				bundle: params.bundle,
+				previousEvaluation: params.previousEvaluation,
+				mode: params.judge.mode,
+			}),
+			{
+				outputSchema: codexOutputJsonSchema,
+				signal: abortController.signal,
+			},
+		);
+		const items: ThreadItem[] = [];
+		let finalResponse = "";
+		let usage: Usage | null = null;
+		let turnFailure: string | null = null;
+		try {
+			for await (const event of streamed.events) {
+				await params.emitActivity?.(activityForCodexEvent(event));
+				if (event.type === "item.completed") {
+					if (event.item.type === "agent_message") {
+						finalResponse = event.item.text;
+					}
+					items.push(event.item);
+				} else if (event.type === "turn.completed") {
+					usage = event.usage;
+				} else if (event.type === "turn.failed") {
+					turnFailure = event.error.message;
+					break;
+				} else if (event.type === "error") {
+					turnFailure = event.message;
+					break;
+				}
+			}
+		} finally {
+			clearTimeout(timeout);
+		}
+		if (turnFailure) {
+			throw new Error(turnFailure);
+		}
+		const report = projectEvaluationReportSchema.parse(
+			parseJsonFromCodexResponse(finalResponse),
+		);
+		const delta = computeDelta({
+			report,
+			previousEvaluation: params.previousEvaluation,
+		});
+		const evaluation = reportToEvaluation({
+			project: params.project,
+			bundle: params.bundle,
+			report,
+			delta,
+			previousEvaluation: params.previousEvaluation,
+		});
+		return {
+			evaluation,
+			rawOutput: {
+				judge: "codex-agent",
+				model: params.judge.model,
+				mode: params.judge.mode,
+				threadId: thread.id,
+				usage,
+				finalResponse,
+				report,
+				delta,
+				items,
+			},
+			judgeRun: {
+				judge: "codex-agent",
+				status: "completed",
+				model: params.judge.model,
+				mode: params.judge.mode,
+				threadId: thread.id,
+				usage,
+			},
+		};
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		throw new HttpError(
+			502,
+			`Codex judge failed: ${message}. Run "bunx codex login status" or "bunx codex doctor --summary" to verify Codex authentication and runtime health.`,
 		);
 	}
-	return items;
 }
 
 export async function judgeProjectValue(params: {
 	project: ProjectProfile;
 	bundle: EvaluationBundle;
 	previousEvaluation?: ProjectValueEvaluation | null;
-}): Promise<{ evaluation: ProjectValueEvaluation; rawOutput: unknown }> {
-	const dimensions = params.project.dimensions.map((key) =>
-		dimensionScore(key, params.project, params.bundle),
-	);
-	const score = clampScore(
-		dimensions.reduce((sum, dimension) => sum + dimension.score, 0) /
-			dimensions.length,
-	);
-	const overallConfidence = clampConfidence(
-		dimensions.reduce((sum, dimension) => sum + dimension.confidence, 0) /
-			dimensions.length,
-	);
-	const gapsTo100 = createGaps(params.bundle);
-	const previousScore = params.previousEvaluation?.score;
-	const previousConfidence = params.previousEvaluation?.overallConfidence;
+	judge?: JudgeSelection;
+	emitActivity?: EvaluationActivityEmitter;
+}): Promise<{
+	evaluation: ProjectValueEvaluation;
+	rawOutput: unknown;
+	judgeRun: JudgeRun;
+}> {
+	const judge = params.judge ?? defaultCodexJudgeSelection;
 
-	const evaluation = projectValueEvaluationSchema.parse({
-		id: randomUUID(),
-		projectId: params.project.id,
-		bundleId: params.bundle.id,
-		score,
-		idealScore: 100,
-		overallConfidence,
-		evidenceLevel: params.bundle.evidenceLevel,
-		summary:
-			"Surface and repository-structure evidence were evaluated. Runtime and audit-grade claims remain provisional.",
-		dimensions,
-		strengths: [
-			params.bundle.inspectedInputs.readme
-				? "README is available for concept evaluation."
-				: undefined,
-			params.bundle.inspectedInputs.packageJson
-				? "package scripts are available for workflow inference."
-				: undefined,
-			params.bundle.inspectedInputs.repoTree
-				? "Repository structure is available for architecture inference."
-				: undefined,
-		].filter((value): value is string => Boolean(value)),
-		gapsTo100,
-		notVerified: params.bundle.notVerified,
-		nextEvidenceToCollect: nextEvidence(params.bundle),
-		previousScore,
-		scoreDelta: previousScore === undefined ? undefined : score - previousScore,
-		previousConfidence,
-		confidenceDelta:
-			previousConfidence === undefined
-				? undefined
-				: Number((overallConfidence - previousConfidence).toFixed(3)),
-		createdAt: new Date().toISOString(),
-	});
+	if (judge.type === "codex-agent") {
+		return judgeProjectValueWithCodex({
+			project: params.project,
+			bundle: params.bundle,
+			previousEvaluation: params.previousEvaluation,
+			judge,
+			emitActivity: params.emitActivity,
+		});
+	}
 
-	return {
-		evaluation,
-		rawOutput: {
-			judge: "deterministic-fallback",
-			reason: "No external LLM judge is required for MVP verification.",
-		},
-	};
+	throw new HttpError(
+		501,
+		`${judge.provider} judge adapter is not implemented. Select Codex agent for evaluation.`,
+	);
+}
+
+export async function generateFocusedImprovementIdeasWithCodex(params: {
+	project: ProjectProfile;
+	bundle: EvaluationBundle;
+	evaluation: ProjectValueEvaluation;
+	dimensionKeys: EvaluationDimensionKey[];
+	judge?: JudgeSelection;
+}): Promise<{
+	ideas: FocusedImprovementIdea[];
+	rawOutput: unknown;
+	judgeRun: JudgeRun;
+}> {
+	const judge =
+		params.judge?.type === "codex-agent"
+			? { ...params.judge, mode: "improvement-request" as const }
+			: (params.judge ?? {
+					...defaultCodexJudgeSelection,
+					mode: "improvement-request" as const,
+				});
+	if (judge.type !== "codex-agent") {
+		throw new HttpError(
+			501,
+			`${judge.provider} judge adapter is not implemented. Select Codex agent for improvement idea generation.`,
+		);
+	}
+
+	try {
+		const abortController = new AbortController();
+		const timeout = setTimeout(() => {
+			abortController.abort();
+		}, codexJudgeTimeoutMs);
+		const codex = new Codex();
+		const thread = codex.startThread({
+			model: judge.model,
+			workingDirectory: params.bundle.projectRoot,
+			sandboxMode: "read-only",
+			approvalPolicy: "never",
+			skipGitRepoCheck: true,
+			networkAccessEnabled: false,
+			webSearchMode: "disabled",
+		});
+		const streamed = await thread.runStreamed(
+			createFocusedImprovementIdeasPrompt({
+				project: params.project,
+				bundle: params.bundle,
+				evaluation: params.evaluation,
+				dimensionKeys: params.dimensionKeys,
+			}),
+			{
+				outputSchema: focusedImprovementIdeasOutputJsonSchema,
+				signal: abortController.signal,
+			},
+		);
+		const items: ThreadItem[] = [];
+		let finalResponse = "";
+		let usage: Usage | null = null;
+		let turnFailure: string | null = null;
+		try {
+			for await (const event of streamed.events) {
+				if (event.type === "item.completed") {
+					if (event.item.type === "agent_message") {
+						finalResponse = event.item.text;
+					}
+					items.push(event.item);
+				} else if (event.type === "turn.completed") {
+					usage = event.usage;
+				} else if (event.type === "turn.failed") {
+					turnFailure = event.error.message;
+					break;
+				} else if (event.type === "error") {
+					turnFailure = event.message;
+					break;
+				}
+			}
+		} finally {
+			clearTimeout(timeout);
+		}
+		if (turnFailure) {
+			throw new Error(turnFailure);
+		}
+		const parsed = focusedImprovementIdeasResultSchema.parse(
+			parseJsonFromCodexResponse(finalResponse),
+		);
+		return {
+			ideas: parsed.ideas,
+			rawOutput: {
+				judge: "codex-agent",
+				model: judge.model,
+				mode: judge.mode,
+				threadId: thread.id,
+				usage,
+				finalResponse,
+				ideas: parsed.ideas,
+				items,
+			},
+			judgeRun: {
+				judge: "codex-agent",
+				status: "completed",
+				model: judge.model,
+				mode: judge.mode,
+				threadId: thread.id,
+				usage,
+			},
+		};
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		throw new HttpError(
+			502,
+			`Codex improvement idea generation failed: ${message}. Run "bunx codex login status" or "bunx codex doctor --summary" to verify Codex authentication and runtime health.`,
+		);
+	}
 }

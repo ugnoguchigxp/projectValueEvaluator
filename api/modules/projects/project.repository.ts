@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
 import {
 	projectProfileSchema,
@@ -54,17 +54,64 @@ export class ProjectRepository {
 		return toProjectProfile(row);
 	}
 
+	async update(
+		id: string,
+		input: ProjectProfileCreate,
+	): Promise<ProjectProfile | null> {
+		const now = new Date();
+		const [row] = await this.db
+			.update(projectProfiles)
+			.set({
+				name: input.name,
+				rootPath: input.rootPath,
+				ideal: input.ideal,
+				primaryAudience: input.primaryAudience,
+				targetWorkflow: input.targetWorkflow,
+				nonGoalsJson: JSON.stringify(input.nonGoals),
+				dimensionsJson: JSON.stringify(input.dimensions),
+				updatedAt: now,
+			})
+			.where(and(eq(projectProfiles.id, id), isNull(projectProfiles.deletedAt)))
+			.returning();
+		return row ? toProjectProfile(row) : null;
+	}
+
 	async findById(id: string): Promise<ProjectProfile | null> {
 		const row = await this.db.query.projectProfiles.findFirst({
-			where: eq(projectProfiles.id, id),
+			where: and(eq(projectProfiles.id, id), isNull(projectProfiles.deletedAt)),
 		});
 		return row ? toProjectProfile(row) : null;
 	}
 
+	async list(): Promise<ProjectProfile[]> {
+		const rows = await this.db.query.projectProfiles.findMany({
+			where: isNull(projectProfiles.deletedAt),
+			orderBy: [desc(projectProfiles.updatedAt)],
+		});
+		return rows.map(toProjectProfile);
+	}
+
 	async findByRootPath(rootPath: string): Promise<ProjectProfile | null> {
 		const row = await this.db.query.projectProfiles.findFirst({
-			where: eq(projectProfiles.rootPath, rootPath),
+			where: and(
+				eq(projectProfiles.rootPath, rootPath),
+				isNull(projectProfiles.deletedAt),
+			),
+			orderBy: [desc(projectProfiles.updatedAt)],
 		});
+		return row ? toProjectProfile(row) : null;
+	}
+
+	async softDelete(id: string): Promise<ProjectProfile | null> {
+		const now = new Date();
+		const [row] = await this.db
+			.update(projectProfiles)
+			.set({
+				deletedAt: now,
+				updatedAt: now,
+			})
+			.where(and(eq(projectProfiles.id, id), isNull(projectProfiles.deletedAt)))
+			.returning();
 		return row ? toProjectProfile(row) : null;
 	}
 }

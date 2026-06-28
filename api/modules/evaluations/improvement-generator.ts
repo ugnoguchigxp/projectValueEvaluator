@@ -30,10 +30,10 @@ function verificationForGap(gap: Gap): string[] {
 
 function promptForGap(gap: Gap): string {
 	return [
-		`ProjectValueEvaluator found this gap: ${gap.title}.`,
-		`Reason: ${gap.rationale}`,
-		`Affected dimensions: ${gap.affectedDimensions.join(", ")}.`,
-		"Implement the smallest change that closes this gap, then run the verification commands.",
+		`次のギャップが検出されています: ${gap.title}。`,
+		`理由: ${gap.rationale}`,
+		`影響する評価軸: ${gap.affectedDimensions.join("、")}。`,
+		"このギャップを閉じる最小の変更を実装し、その後に検証コマンドを実行してください。",
 	].join("\n");
 }
 
@@ -63,9 +63,9 @@ export function generateImprovementRequests(
 				taskType: taskTypeForGap(gap),
 				prompt: promptForGap(gap),
 				acceptanceCriteria: [
-					"The gap is addressed with a minimal, reviewable change.",
-					"Evidence is added or updated so the next evaluation can detect the improvement.",
-					"Verification commands complete successfully or their failure is documented.",
+					"ギャップが最小かつレビューしやすい変更で解消されている。",
+					"次回評価で改善を検出できるように、根拠が追加または更新されている。",
+					"検証コマンドが成功している、または失敗理由が記録されている。",
 				],
 				verificationCommands: verificationForGap(gap),
 				createdAt: new Date().toISOString(),

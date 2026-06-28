@@ -13,6 +13,8 @@ await runEvaluatorCli(async () => {
 		const result = await evaluationService.evaluateProject({
 			projectId: project.id,
 			projectRoot: args.project,
+			baselinePrompt: args.baselinePrompt,
+			judge: args.judge,
 		});
 		printEvaluation(result, args.json);
 	});

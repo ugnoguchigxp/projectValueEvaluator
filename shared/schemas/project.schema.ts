@@ -4,15 +4,17 @@ export const evaluationDimensionKeySchema = z.enum([
 	"conceptValue",
 	"implementationCompleteness",
 	"architectureQuality",
-	"maintainability",
-	"security",
+	"uiUx",
 	"testability",
+	"operability",
+	"security",
+	"maintainability",
+	"extensibility",
+	"ossProductValue",
+	"strategicFit",
 	"documentation",
 	"agentUsability",
-	"extensibility",
 	"reliability",
-	"strategicFit",
-	"ossProductValue",
 ]);
 export type EvaluationDimensionKey = z.infer<
 	typeof evaluationDimensionKeySchema
@@ -22,16 +24,33 @@ export const defaultEvaluationDimensions = [
 	"conceptValue",
 	"implementationCompleteness",
 	"architectureQuality",
-	"maintainability",
-	"security",
+	"uiUx",
 	"testability",
-	"documentation",
-	"agentUsability",
+	"operability",
+	"security",
+	"maintainability",
 	"extensibility",
-	"reliability",
-	"strategicFit",
 	"ossProductValue",
+	"strategicFit",
 ] as const satisfies EvaluationDimensionKey[];
+
+export const evaluationDimensionLabels: Record<EvaluationDimensionKey, string> =
+	{
+		conceptValue: "Concept Value",
+		implementationCompleteness: "Implementation Completeness",
+		architectureQuality: "Architecture",
+		uiUx: "UI / UX",
+		testability: "Testability",
+		operability: "Operability",
+		security: "Security",
+		maintainability: "Maintainability",
+		extensibility: "Extensibility",
+		ossProductValue: "OSS / External Value",
+		strategicFit: "Strategic Fit",
+		documentation: "Documentation",
+		agentUsability: "Agent Usability",
+		reliability: "Reliability",
+	};
 
 export const projectProfileInputSchema = z.object({
 	name: z.string().trim().min(1),

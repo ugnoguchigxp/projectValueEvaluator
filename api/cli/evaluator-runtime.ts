@@ -14,12 +14,16 @@ import {
 import type {
 	EvaluationBundle,
 	EvaluationResponse,
+	JudgeSelection,
 } from "../../shared/schemas/evaluation.schema";
+import { defaultCodexJudgeSelection } from "../modules/llm/judge-client";
 
 type ParsedArgs = {
 	project?: string;
 	profile?: string;
 	json: boolean;
+	baselinePrompt?: string;
+	judge: JudgeSelection;
 };
 
 function readRequiredValue(
@@ -35,7 +39,10 @@ function readRequiredValue(
 }
 
 export function parseEvaluatorArgs(argv: string[]): ParsedArgs {
-	const parsed: ParsedArgs = { json: false };
+	const parsed: ParsedArgs = {
+		json: false,
+		judge: defaultCodexJudgeSelection,
+	};
 	for (let index = 0; index < argv.length; index += 1) {
 		const arg = argv[index];
 		if (arg === "--json") {
@@ -50,6 +57,75 @@ export function parseEvaluatorArgs(argv: string[]): ParsedArgs {
 		if (arg === "--profile") {
 			parsed.profile = readRequiredValue(argv, index, "--profile");
 			index += 1;
+			continue;
+		}
+		if (arg === "--baseline-prompt") {
+			parsed.baselinePrompt = readRequiredValue(
+				argv,
+				index,
+				"--baseline-prompt",
+			);
+			index += 1;
+			continue;
+		}
+		if (arg === "--provider") {
+			const provider = readRequiredValue(argv, index, "--provider");
+			index += 1;
+			if (provider === "codex") {
+				parsed.judge = {
+					type: "codex-agent",
+					model:
+						parsed.judge.type === "codex-agent"
+							? parsed.judge.model
+							: "gpt-5.5",
+					mode:
+						parsed.judge.type === "codex-agent"
+							? parsed.judge.mode
+							: "review-only",
+				};
+				continue;
+			}
+			if (
+				provider === "openai" ||
+				provider === "azure-openai" ||
+				provider === "local-llm"
+			) {
+				parsed.judge = {
+					type: "llm-provider",
+					provider,
+					fallbackPolicy: "none",
+				};
+				continue;
+			}
+			throw new Error(`Unsupported provider: ${provider}.`);
+		}
+		if (arg === "--model") {
+			const model = readRequiredValue(argv, index, "--model");
+			index += 1;
+			parsed.judge =
+				parsed.judge.type === "codex-agent"
+					? { ...parsed.judge, model: model as typeof parsed.judge.model }
+					: { ...parsed.judge, model };
+			continue;
+		}
+		if (arg === "--codex-mode") {
+			const mode = readRequiredValue(argv, index, "--codex-mode");
+			index += 1;
+			if (
+				mode !== "review-only" &&
+				mode !== "improvement-request" &&
+				mode !== "reevaluation"
+			) {
+				throw new Error(`Unsupported Codex mode: ${mode}.`);
+			}
+			const codexMode = mode as
+				| "review-only"
+				| "improvement-request"
+				| "reevaluation";
+			parsed.judge =
+				parsed.judge.type === "codex-agent"
+					? { ...parsed.judge, mode: codexMode }
+					: { type: "codex-agent", model: "gpt-5.5", mode: codexMode };
 			continue;
 		}
 		throw new Error(`Unknown argument: ${arg}`);
@@ -87,16 +163,7 @@ export async function loadProjectInput(
 	const fromFile = args.profile
 		? await readProfileFile(path.resolve(args.profile))
 		: {};
-	const packageJsonPath = path.join(rootPath, "package.json");
-	let fallbackName = path.basename(rootPath);
-	try {
-		const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as {
-			name?: string;
-		};
-		fallbackName = packageJson.name ?? fallbackName;
-	} catch {
-		// The bundle builder records missing package.json; CLI profile loading can continue.
-	}
+	const fallbackName = path.basename(rootPath);
 	return projectProfileInputSchema.parse({
 		name: fallbackName,
 		ideal:
@@ -145,6 +212,8 @@ export function printBundle(bundle: EvaluationBundle, json: boolean): void {
 	console.log(`Project: ${bundle.projectId}`);
 	console.log(`Evidence Level: ${bundle.evidenceLevel}`);
 	console.log(`Inputs: ${Object.keys(bundle.inputs).join(", ")}`);
+	console.log(`Source Files: ${bundle.inputs.sourceFiles.length}`);
+	console.log(`Verification Runs: ${bundle.inputs.verificationRuns.length}`);
 	if (bundle.missingInputs.length > 0) {
 		console.log(`Missing Inputs: ${bundle.missingInputs.join(", ")}`);
 	}
@@ -168,6 +237,18 @@ export function printEvaluation(
 	}
 	if (evaluation.confidenceDelta !== undefined) {
 		console.log(`Confidence Delta: ${evaluation.confidenceDelta}`);
+	}
+	console.log("\nVerification Runs:");
+	for (const run of result.bundle.inputs.verificationRuns) {
+		console.log(
+			`- ${run.name}: ${run.status} (${run.durationMs}ms, exit ${run.exitCode ?? "n/a"})`,
+		);
+	}
+	console.log("\nSource Checks:");
+	for (const inspection of evaluation.sourceInspections) {
+		console.log(
+			`- ${inspection.title}: ${inspection.status} (${inspection.files.length} files)`,
+		);
 	}
 	console.log("\nTop Gaps:");
 	for (const gap of evaluation.gapsTo100.slice(0, 5)) {

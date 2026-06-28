@@ -1,0 +1,2873 @@
+{
+  "bundle": {
+    "id": "7e9b2ea5-d401-48d2-a2ca-d1fa468eb16d",
+    "projectId": "50e0289c-3458-4661-b8c4-3a3563175d45",
+    "evidenceLevel": "repo-structure",
+    "projectRoot": "/Users/y.noguchi/Code/projectEvaluator",
+    "inputs": {
+      "promptContext": {
+        "schemaVersion": "evaluation-prompt-context/v1",
+        "baselinePrompt": "このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください",
+        "projectName": "project-value-evaluator",
+        "projectRoot": "/Users/y.noguchi/Code/projectEvaluator",
+        "projectIdeal": "このプロジェクトが、対象ユーザーに明確な価値を提供し、実装・検証・文書・agent usability が揃った状態。",
+        "primaryAudience": "coding agents",
+        "targetWorkflow": "evaluate project value and generate next improvements",
+        "nonGoals": [],
+        "dimensions": [
+          {
+            "key": "conceptValue",
+            "label": "conceptValue"
+          },
+          {
+            "key": "implementationCompleteness",
+            "label": "implementationCompleteness"
+          },
+          {
+            "key": "architectureQuality",
+            "label": "architectureQuality"
+          },
+          {
+            "key": "maintainability",
+            "label": "maintainability"
+          },
+          {
+            "key": "security",
+            "label": "security"
+          },
+          {
+            "key": "testability",
+            "label": "testability"
+          },
+          {
+            "key": "documentation",
+            "label": "documentation"
+          },
+          {
+            "key": "agentUsability",
+            "label": "agentUsability"
+          },
+          {
+            "key": "extensibility",
+            "label": "extensibility"
+          },
+          {
+            "key": "reliability",
+            "label": "reliability"
+          },
+          {
+            "key": "strategicFit",
+            "label": "strategicFit"
+          },
+          {
+            "key": "ossProductValue",
+            "label": "ossProductValue"
+          }
+        ],
+        "judgeSettings": {
+          "provider": "codex",
+          "model": "gpt-5.5",
+          "codexMode": "review-only",
+          "status": "ready"
+        },
+        "previousEvaluation": {
+          "evaluationId": "a7e074d4-09ef-43f1-bbb0-b8904001a8d2",
+          "overallScore": 82,
+          "confidence": 0.82,
+          "dimensions": [
+            {
+              "key": "conceptValue",
+              "score": 88
+            },
+            {
+              "key": "implementationCompleteness",
+              "score": 79
+            },
+            {
+              "key": "architectureQuality",
+              "score": 84
+            },
+            {
+              "key": "maintainability",
+              "score": 81
+            },
+            {
+              "key": "security",
+              "score": 72
+            },
+            {
+              "key": "testability",
+              "score": 87
+            },
+            {
+              "key": "documentation",
+              "score": 80
+            },
+            {
+              "key": "agentUsability",
+              "score": 86
+            },
+            {
+              "key": "extensibility",
+              "score": 80
+            },
+            {
+              "key": "reliability",
+              "score": 79
+            },
+            {
+              "key": "strategicFit",
+              "score": 89
+            },
+            {
+              "key": "ossProductValue",
+              "score": 75
+            }
+          ],
+          "weaknesses": [
+            "Evidence Policy と実装の自動 verify 実行の不整合を解消する",
+            "Judge provider 境界の実装証跡を評価 bundle に含める",
+            "CLI/API/UI のサンプル出力を保存してレビュー可能にする",
+            "評価対象 rootPath とファイルアクセス境界の安全性を確認する",
+            "bundle-builder の責務を evidence collector と prompt context builder に分ける"
+          ],
+          "createdAt": "2026-06-28T05:59:19.000Z"
+        },
+        "inputs": {
+          "readme": "# ProjectValueEvaluator\n\nProjectValueEvaluator は、ソフトウェアプロジェクトの現在価値を多角的に評点し、前回評価との差分と次の改善案を比較可能な形で残すための Hono + TypeScript ベースの評価サービスです。\n\n中心にある baseline prompt は次です。\n\n```text\nこのプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください\n```\n\nこのプロジェクトの役割は、上記の評価依頼を Codex-first で実行し、prompt、rubric、schema、provider 設定、保存履歴、前回比較を固定化することです。Codex を現在の主 judge としつつ、OpenAI / Azure OpenAI / Local LLM などの provider 拡張点は残します。\n\n## MVP\n\n再設計後の MVP は次の流れを目標にします。\n\n```text\nProjectProfile\n  -> EvaluationPromptContext\n  -> JudgeProviderAdapter\n  -> ProjectEvaluationReport v1\n  -> EvaluationDelta\n  -> ImprovementIdeas\n  -> Saved history\n```\n\n現在の実装は移行途中です。source truth は [Codex-First Multi-Agent Evaluation Implementation Plan](spec/codex-first-multi-agent-evaluation-implementation-plan.md) です。\n\n## 評価で扱うもの\n\n| Item | Purpose |\n| --- | --- |\n| `ProjectProfile` | Project Ideal、対象 workflow、non-goals、評価軸 |\n| `EvaluationPromptContext` | baseline prompt、対象 repo 情報、前回評価 summary、judge 設定 |\n| `ProjectEvaluationReport` | overall score、dimension score、confidence、根拠、弱点、改善案 |\n| `EvaluationDelta` | 前回評価との差分、dimension delta、新規/解消された弱点 |\n| `ImprovementIdea` | 評価結果から導かれた次の改善候補 |\n\n## Evidence Policy\n\nbaseline 評価は、Codex / LLMProvider に多角的な評点を依頼する経路です。アプリ側は、この経路で build、test、verify、source inspection を自動実行しません。\n\n評価結果には、judge が確認できなかった事項を `notVerified` として残します。runtime verification や audit-grade evidence は、後続の明示的な evidence collector として追加します。\n\n## 構成\n\n| Path | Role |\n| --- | --- |\n| `api/app/hono.ts` | Hono app composition、API route 登録、`AppType` export |\n| `api/routes/projects.route.ts` | ProjectProfile と project-scoped evaluation API |\n| `api/routes/evaluations.route.ts` | Evaluation / Improvement lookup API |\n| `api/modules/projects/` | ProjectProfile repository / service |\n| `api/modules/evaluations/` | prompt context、repository、service、delta、improvement generator |\n| `api/modules/llm/judge-client.ts` | Codex-first judge client。provider adapter 境界 |\n| `api/cli/` | evaluate / reevaluate CLI |\n| `shared/schemas/` | API / CLI / judge output 共有 Zod schema |\n| `drizzle/` | SQLite migrations |\n| `spec/` | 現行の実装計画 |\n\n## セットアップ\n\n```bash\nbun install\ncp .env.example .env\nbun run db:migrate\n```\n\n## CLI\n\n```bash\nbun run evaluator:evaluate -- --project /path/to/repo\nbun run evaluator:reevaluate -- --project /path/to/repo\n```\n\nJSON 出力:\n\n```bash\nbun run evaluator:evaluate -- --project /path/to/repo --json\n```\n\nprofile JSON を指定する場合:\n\n```bash\nbun run evaluator:evaluate -- --project /path/to/repo --profile project-profile.json\n```\n\n`project-profile.json` は `name`、`ideal`、`primaryAudience`、`targetWorkflow`、`nonGoals`、`dimensions` を上書きできます。`rootPath` は `--project` が優先されます。\n\n## API\n\n| Method | Path | Description |\n| --- | --- | --- |\n| `GET` | `/api/health` | health check |\n| `POST` | `/api/projects` | ProjectProfile 作成 |\n| `GET` | `/api/projects/:id` | ProjectProfile 取得 |\n| `POST` | `/api/projects/:id/evaluations` | 評価実行 |\n| `GET` | `/api/projects/:id/evaluations/latest` | 最新評価取得 |\n| `POST` | `/api/projects/:id/reevaluate` | 再評価実行 |\n| `GET` | `/api/evaluations/:id` | 評価取得 |\n| `GET` | `/api/evaluations/:id/improvements` | 改善依頼取得 |\n\n## 検証\n\n```bash\nbun run typecheck\nbun run lint\nbun run format:check\nbun run test\nbun run build\nbun run verify\n```\n\n## MVP Non-goals\n\n```text\n- 自動で改善実装を実行する agent orchestration\n- audit-grade のコード監査\n- runtime sandbox 実行\n- 複数 LLM による voting\n- 大きな dashboard\n- SaaS 的な multi-tenant user management\n```\n\n## 詳細仕様\n\n- [Codex-First Multi-Agent Evaluation Implementation Plan](spec/codex-first-multi-agent-evaluation-implementation-plan.md)\n",
+          "llmContext": "# LLM Context: ProjectValueEvaluator\n\nこのリポジトリは、Hono Standard を起点にした ProjectValueEvaluator の MVP です。目的は、普段の「このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください」という依頼を baseline prompt として固定し、Codex-first で評価を実行し、評点・改善案・前回差分を比較可能な形で保存することです。\n\n## Repository Snapshot\n\n- Backend は Bun + Hono。API composition は `api/app/hono.ts`。\n- DB は local SQLite + Drizzle。schema は `api/db/schema.ts`、migration は `drizzle/`。\n- MVP の主入口は CLI と評価ワークベンチ。`api/cli/evaluate.ts`、`api/cli/reevaluate.ts`、UI の Home/Settings が同じ評価 usecase を呼ぶ。\n- API は CLI と同じ usecase を呼ぶ。route は `api/routes/projects.route.ts` と `api/routes/evaluations.route.ts`。\n- 共有 schema は `shared/schemas/`。ProjectProfile、EvaluationPromptContext、ProjectEvaluationReport、EvaluationDelta、ImprovementIdea を Zod で定義する方向へ移行する。\n- Judge は `api/modules/llm/judge-client.ts`。現在の主経路は Codex SDK。OpenAI / Azure OpenAI / Local LLM は provider 抽象に残すが、未実装 adapter は `adapter-not-implemented` として扱う。\n- frontend は評価ワークベンチへ寄せる。Provider 設定は設定済み状態と実行可能状態を分けて表示する。\n\n## Core Flow\n\n```text\nProjectProfile\n  -> build EvaluationPromptContext\n  -> JudgeProviderAdapter\n  -> save ProjectEvaluationReport\n  -> compute EvaluationDelta\n  -> show ImprovementIdeas\n```\n\n## Top-Level Map\n\n| Path | Role |\n| --- | --- |\n| `api/app/hono.ts` | Hono middleware、API route、static fallback、`AppType` export |\n| `api/routes/projects.route.ts` | ProjectProfile 作成/取得、評価実行、再評価 |\n| `api/routes/evaluations.route.ts` | Evaluation / Improvement lookup |\n| `api/modules/projects/` | Project repository / service |\n| `api/modules/evaluations/bundle-builder.ts` | 移行対象。baseline 評価では EvaluationPromptContext builder に縮小する |\n| `api/modules/evaluations/evaluation.service.ts` | prompt context 作成、judge、保存、delta、改善案生成を束ねる usecase |\n| `api/modules/evaluations/evaluation.repository.ts` | prompt context / report / raw output / delta / improvement 永続化 |\n| `api/modules/evaluations/improvement-generator.ts` | report の improvementIdeas を保存用 request に変換 |\n| `api/modules/llm/judge-client.ts` | Codex-first judge client。provider adapter 境界 |\n| `shared/schemas/project.schema.ts` | ProjectProfile と評価軸 |\n| `shared/schemas/evaluation.schema.ts` | prompt context / report / delta / provider schema |\n| `spec/` | Codex-first multi-agent evaluation implementation plan |\n\n## Implementation Contracts\n\n- 評価結果は `overallScore` だけで返さない。必ず dimension score、confidence、rationale、evidence、concerns、weaknesses、improvementIdeas を含める。\n- baseline prompt は evaluation report と一緒に保存する。\n- 前回比較は保存済み report から deterministic に計算する。\n- Codex を現在の主 judge とするが、OpenAI / Azure OpenAI / Local LLM の provider 抽象は削らない。\n- 未実装 provider は暗黙 fallback せず、`adapter-not-implemented` として扱う。\n- CLI と API は同じ `EvaluationService` を使う。評価ロジックを二重実装しない。\n- DB では JSON 配列を text JSON として保存してよい。検索や集計が必要になった時点で正規化する。\n- Hono route の request / response shape は `shared/schemas/` を優先する。\n- Auth はテンプレート由来で残っているが、MVP 評価 API の中心ではない。必要になるまで拡張しない。\n\n## Commands\n\n| Command | Purpose |\n| --- | --- |\n| `bun run db:migrate` | SQLite migration を適用 |\n| `bun run evaluator:evaluate -- --project <path>` | 評価、gap 分析、改善依頼生成 |\n| `bun run evaluator:reevaluate -- --project <path>` | 再評価して delta を表示 |\n| `bun run typecheck` | TypeScript check |\n| `bun run lint` | Biome lint |\n| `bun run format:check` | Biome format check |\n| `bun run test` | Vitest |\n| `bun run build` | Vite production build |\n| `bun run verify` | full verification pipeline |\n\n## Verification Matrix\n\n| Change type | Minimum useful verification |\n| --- | --- |\n| Schema / domain model | `bun run typecheck` and targeted Vitest |\n| Prompt context / judge / improvement logic | `bunx vitest run api/modules/evaluations/evaluation.service.test.ts` |\n| DB schema / migration | `DATABASE_URL=/tmp/project-evaluator.sqlite bun run db:migrate` |\n| CLI flow | temp DB migration, then `evaluator:evaluate` and `evaluator:reevaluate` |\n| API flow | Hono `app.request` against `/api/projects` and `/api/projects/:id/evaluations` |\n| Broad change | `bun run verify` |\n\n## MVP Non-goals\n\n- Do not add automatic code improvement execution yet.\n- Do not remove non-Codex provider settings or schema support.\n- Do not run build/test/verify as part of baseline evaluation.\n- Do not claim audit-grade evidence without a separate explicit evidence collector.\n- Do not introduce a second API framework.\n",
+          "packageJson": {
+            "name": "project-value-evaluator",
+            "version": "1.0.0",
+            "description": "Project value evaluator that turns score gaps into improvement requests.",
+            "type": "module",
+            "author": "",
+            "license": "MIT",
+            "keywords": [
+              "hono",
+              "project-evaluation",
+              "coding-agents",
+              "typescript"
+            ],
+            "scripts": {
+              "dev": "bunx --bun vite",
+              "dev:vite": "vite",
+              "start": "bun run api/app/server.ts",
+              "auth:create-admin": "bun run api/cli/auth-create-admin.ts",
+              "evaluator:bundle": "bun run api/cli/bundle.ts",
+              "evaluator:evaluate": "bun run api/cli/evaluate.ts",
+              "evaluator:reevaluate": "bun run api/cli/reevaluate.ts",
+              "db:generate": "drizzle-kit generate",
+              "db:migrate": "bun run api/cli/migrate.ts",
+              "db:migrate:drizzle": "drizzle-kit migrate",
+              "test": "vitest run",
+              "test:watch": "vitest",
+              "typecheck": "tsc --noEmit",
+              "lint": "biome lint api web shared",
+              "format": "biome format --write api web shared",
+              "format:check": "biome format api web shared",
+              "build:web": "vite build",
+              "build": "bun run build:web",
+              "verify": "bun scripts/verify.ts",
+              "verify:strict": "bun run verify"
+            },
+            "files": [
+              "dist-web",
+              "README.md",
+              "LICENSE.md",
+              "package.json"
+            ],
+            "dependencies": {
+              "@hono/zod-validator": "0.8.0",
+              "@openai/codex-sdk": "^0.142.3",
+              "@tanstack/react-query": "5.101.0",
+              "@tanstack/react-router": "1.170.15",
+              "@tanstack/react-table": "8.21.3",
+              "drizzle-orm": "0.45.2",
+              "hono": "4.12.25",
+              "jose": "6.2.3",
+              "lucide-react": "1.18.0",
+              "react": "19.2.7",
+              "react-dom": "19.2.7",
+              "react-hook-form": "^7.79.0",
+              "zod": "4.4.3"
+            },
+            "devDependencies": {
+              "@biomejs/biome": "2.5.0",
+              "@hono/vite-dev-server": "0.26.0",
+              "@tailwindcss/vite": "^4.3.1",
+              "@types/bun": "1.3.14",
+              "@types/node": "25.9.3",
+              "@types/react": "19.2.17",
+              "@types/react-dom": "19.2.3",
+              "@vitejs/plugin-react": "6.0.2",
+              "drizzle-kit": "0.31.10",
+              "tailwindcss": "^4.3.1",
+              "typescript": "5.9.3",
+              "vite": "8.0.16",
+              "vitest": "4.1.8"
+            },
+            "overrides": {
+              "esbuild": "0.28.1",
+              "picomatch": "4.0.4",
+              "postcss": "8.5.15",
+              "rollup": "4.62.0",
+              "undici": "7.27.2",
+              "vite": "8.0.16",
+              "ws": "8.21.0"
+            }
+          },
+          "repoTree": [
+            ".dockerignore",
+            ".env.example",
+            ".gitignore",
+            ".husky/",
+            ".husky/pre-commit",
+            ".husky/pre-push",
+            "api/",
+            "api/app/",
+            "api/app/env.test.ts",
+            "api/app/env.ts",
+            "api/app/hono.test.ts",
+            "api/app/hono.ts",
+            "api/app/server.ts",
+            "api/cli/",
+            "api/cli/auth-create-admin.ts",
+            "api/cli/bundle.ts",
+            "api/cli/evaluate.ts",
+            "api/cli/evaluator-runtime.ts",
+            "api/cli/migrate.ts",
+            "api/cli/reevaluate.ts",
+            "api/config/",
+            "api/config/appDefaults.ts",
+            "api/db/",
+            "api/db/index.ts",
+            "api/db/schema.ts",
+            "api/middleware/",
+            "api/middleware/auth.test.ts",
+            "api/middleware/auth.ts",
+            "api/modules/",
+            "api/modules/auth/",
+            "api/modules/auth/auth-cookies.test.ts",
+            "api/modules/auth/auth-cookies.ts",
+            "api/modules/auth/auth.service.test.ts",
+            "api/modules/auth/auth.service.ts",
+            "api/modules/auth/context.test.ts",
+            "api/modules/auth/context.ts",
+            "api/modules/auth/errors.test.ts",
+            "api/modules/auth/errors.ts",
+            "api/modules/auth/password.test.ts",
+            "api/modules/auth/password.ts",
+            "api/modules/auth/token.service.test.ts",
+            "api/modules/auth/token.service.ts",
+            "api/modules/auth/types.test.ts",
+            "api/modules/auth/types.ts",
+            "api/modules/evaluations/",
+            "api/modules/evaluations/bundle-builder.ts",
+            "api/modules/evaluations/evaluation.repository.ts",
+            "api/modules/evaluations/evaluation.service.test.ts",
+            "api/modules/evaluations/evaluation.service.ts",
+            "api/modules/evaluations/improvement-generator.ts",
+            "api/modules/evaluations/score-utils.ts",
+            "api/modules/llm/",
+            "api/modules/llm/judge-client.test.ts",
+            "api/modules/llm/judge-client.ts",
+            "api/modules/projects/",
+            "api/modules/projects/project.repository.ts",
+            "api/modules/projects/project.service.test.ts",
+            "api/modules/projects/project.service.ts",
+            "api/routes/",
+            "api/routes/auth.route.test.ts",
+            "api/routes/auth.route.ts",
+            "api/routes/codex.route.ts",
+            "api/routes/evaluations.route.test.ts",
+            "api/routes/evaluations.route.ts",
+            "api/routes/health.route.test.ts",
+            "api/routes/health.route.ts",
+            "api/routes/projects.route.test.ts",
+            "api/routes/projects.route.ts",
+            "api/routes/system.route.test.ts",
+            "api/routes/system.route.ts",
+            "api/types/",
+            "api/types/hono-context.d.ts",
+            "biome.json",
+            "bun.lock",
+            "bunfig.toml",
+            "docs/",
+            "docs/template-variant-management.md",
+            "drizzle/",
+            "drizzle/0001_auth.sql",
+            "drizzle/0002_project_evaluator.sql",
+            "drizzle/0003_source_inspections.sql",
+            "drizzle/0004_project_soft_delete.sql",
+            "drizzle/0005_evaluation_activity_events.sql",
+            "drizzle/0006_evaluation_report_delta.sql",
+            "drizzle.config.ts",
+            "LICENSE.md",
+            "LLM_CONTEXT.md",
+            "package.json",
+            "README.md",
+            "scripts/",
+            "scripts/verify.ts",
+            "shared/",
+            "shared/schemas/",
+            "shared/schemas/auth.schema.ts",
+            "shared/schemas/evaluation.schema.ts",
+            "shared/schemas/improvement.schema.ts",
+            "shared/schemas/project.schema.ts",
+            "spec/",
+            "spec/baselines/",
+            "spec/baselines/2026-06-28-current-evaluator-baseline.json",
+            "spec/baselines/2026-06-28-new-report-baseline.json",
+            "spec/codex-first-multi-agent-evaluation-implementation-plan.md",
+            "tsconfig.build.json",
+            "tsconfig.json",
+            "vite.config.ts",
+            "vitest.config.ts",
+            "web/",
+            "web/index.html",
+            "web/src/",
+            "web/src/api.ts",
+            "web/src/App.tsx",
+            "web/src/auth-context.tsx",
+            "web/src/domains/",
+            "web/src/domains/auth/",
+            "web/src/judge-settings-context.tsx",
+            "web/src/main.tsx",
+            "web/src/router.tsx",
+            "web/src/routes/",
+            "web/src/routes/home-route.tsx",
+            "web/src/routes/login-route.tsx",
+            "web/src/routes/root-route.tsx",
+            "web/src/routes/settings-route.tsx",
+            "web/src/routes/showcase-route.tsx",
+            "web/src/showcase-settings-context.tsx",
+            "web/src/showcase-table-search.ts",
+            "web/src/styles.css",
+            "web/src/ui-language-context.tsx",
+            "web/src/views/",
+            "web/src/views/home-view.tsx",
+            "web/src/views/login-view.tsx",
+            "web/src/views/settings-view.tsx",
+            "web/src/views/showcase-view.tsx",
+            "wiki-knowledge/",
+            "wiki-knowledge/pages/",
+            "wiki-knowledge/pages/tech/",
+            "wiki-knowledge/pages/tech/index.md",
+            "wiki-knowledge/wiki/"
+          ],
+          "scripts": {
+            "dev": "bunx --bun vite",
+            "dev:vite": "vite",
+            "start": "bun run api/app/server.ts",
+            "auth:create-admin": "bun run api/cli/auth-create-admin.ts",
+            "evaluator:bundle": "bun run api/cli/bundle.ts",
+            "evaluator:evaluate": "bun run api/cli/evaluate.ts",
+            "evaluator:reevaluate": "bun run api/cli/reevaluate.ts",
+            "db:generate": "drizzle-kit generate",
+            "db:migrate": "bun run api/cli/migrate.ts",
+            "db:migrate:drizzle": "drizzle-kit migrate",
+            "test": "vitest run",
+            "test:watch": "vitest",
+            "typecheck": "tsc --noEmit",
+            "lint": "biome lint api web shared",
+            "format": "biome format --write api web shared",
+            "format:check": "biome format api web shared",
+            "build:web": "vite build",
+            "build": "bun run build:web",
+            "verify": "bun scripts/verify.ts",
+            "verify:strict": "bun run verify"
+          }
+        }
+      },
+      "systemContext": {
+        "targetProjectName": "project-value-evaluator",
+        "targetProjectRoot": "/Users/y.noguchi/Code/projectEvaluator",
+        "projectIdeal": "このプロジェクトが、対象ユーザーに明確な価値を提供し、実装・検証・文書・agent usability が揃った状態。",
+        "primaryAudience": "coding agents",
+        "targetWorkflow": "evaluate project value and generate next improvements",
+        "nonGoals": []
+      },
+      "readme": "# ProjectValueEvaluator\n\nProjectValueEvaluator は、ソフトウェアプロジェクトの現在価値を多角的に評点し、前回評価との差分と次の改善案を比較可能な形で残すための Hono + TypeScript ベースの評価サービスです。\n\n中心にある baseline prompt は次です。\n\n```text\nこのプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください\n```\n\nこのプロジェクトの役割は、上記の評価依頼を Codex-first で実行し、prompt、rubric、schema、provider 設定、保存履歴、前回比較を固定化することです。Codex を現在の主 judge としつつ、OpenAI / Azure OpenAI / Local LLM などの provider 拡張点は残します。\n\n## MVP\n\n再設計後の MVP は次の流れを目標にします。\n\n```text\nProjectProfile\n  -> EvaluationPromptContext\n  -> JudgeProviderAdapter\n  -> ProjectEvaluationReport v1\n  -> EvaluationDelta\n  -> ImprovementIdeas\n  -> Saved history\n```\n\n現在の実装は移行途中です。source truth は [Codex-First Multi-Agent Evaluation Implementation Plan](spec/codex-first-multi-agent-evaluation-implementation-plan.md) です。\n\n## 評価で扱うもの\n\n| Item | Purpose |\n| --- | --- |\n| `ProjectProfile` | Project Ideal、対象 workflow、non-goals、評価軸 |\n| `EvaluationPromptContext` | baseline prompt、対象 repo 情報、前回評価 summary、judge 設定 |\n| `ProjectEvaluationReport` | overall score、dimension score、confidence、根拠、弱点、改善案 |\n| `EvaluationDelta` | 前回評価との差分、dimension delta、新規/解消された弱点 |\n| `ImprovementIdea` | 評価結果から導かれた次の改善候補 |\n\n## Evidence Policy\n\nbaseline 評価は、Codex / LLMProvider に多角的な評点を依頼する経路です。アプリ側は、この経路で build、test、verify、source inspection を自動実行しません。\n\n評価結果には、judge が確認できなかった事項を `notVerified` として残します。runtime verification や audit-grade evidence は、後続の明示的な evidence collector として追加します。\n\n## 構成\n\n| Path | Role |\n| --- | --- |\n| `api/app/hono.ts` | Hono app composition、API route 登録、`AppType` export |\n| `api/routes/projects.route.ts` | ProjectProfile と project-scoped evaluation API |\n| `api/routes/evaluations.route.ts` | Evaluation / Improvement lookup API |\n| `api/modules/projects/` | ProjectProfile repository / service |\n| `api/modules/evaluations/` | prompt context、repository、service、delta、improvement generator |\n| `api/modules/llm/judge-client.ts` | Codex-first judge client。provider adapter 境界 |\n| `api/cli/` | evaluate / reevaluate CLI |\n| `shared/schemas/` | API / CLI / judge output 共有 Zod schema |\n| `drizzle/` | SQLite migrations |\n| `spec/` | 現行の実装計画 |\n\n## セットアップ\n\n```bash\nbun install\ncp .env.example .env\nbun run db:migrate\n```\n\n## CLI\n\n```bash\nbun run evaluator:evaluate -- --project /path/to/repo\nbun run evaluator:reevaluate -- --project /path/to/repo\n```\n\nJSON 出力:\n\n```bash\nbun run evaluator:evaluate -- --project /path/to/repo --json\n```\n\nprofile JSON を指定する場合:\n\n```bash\nbun run evaluator:evaluate -- --project /path/to/repo --profile project-profile.json\n```\n\n`project-profile.json` は `name`、`ideal`、`primaryAudience`、`targetWorkflow`、`nonGoals`、`dimensions` を上書きできます。`rootPath` は `--project` が優先されます。\n\n## API\n\n| Method | Path | Description |\n| --- | --- | --- |\n| `GET` | `/api/health` | health check |\n| `POST` | `/api/projects` | ProjectProfile 作成 |\n| `GET` | `/api/projects/:id` | ProjectProfile 取得 |\n| `POST` | `/api/projects/:id/evaluations` | 評価実行 |\n| `GET` | `/api/projects/:id/evaluations/latest` | 最新評価取得 |\n| `POST` | `/api/projects/:id/reevaluate` | 再評価実行 |\n| `GET` | `/api/evaluations/:id` | 評価取得 |\n| `GET` | `/api/evaluations/:id/improvements` | 改善依頼取得 |\n\n## 検証\n\n```bash\nbun run typecheck\nbun run lint\nbun run format:check\nbun run test\nbun run build\nbun run verify\n```\n\n## MVP Non-goals\n\n```text\n- 自動で改善実装を実行する agent orchestration\n- audit-grade のコード監査\n- runtime sandbox 実行\n- 複数 LLM による voting\n- 大きな dashboard\n- SaaS 的な multi-tenant user management\n```\n\n## 詳細仕様\n\n- [Codex-First Multi-Agent Evaluation Implementation Plan](spec/codex-first-multi-agent-evaluation-implementation-plan.md)\n",
+      "llmContext": "# LLM Context: ProjectValueEvaluator\n\nこのリポジトリは、Hono Standard を起点にした ProjectValueEvaluator の MVP です。目的は、普段の「このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください」という依頼を baseline prompt として固定し、Codex-first で評価を実行し、評点・改善案・前回差分を比較可能な形で保存することです。\n\n## Repository Snapshot\n\n- Backend は Bun + Hono。API composition は `api/app/hono.ts`。\n- DB は local SQLite + Drizzle。schema は `api/db/schema.ts`、migration は `drizzle/`。\n- MVP の主入口は CLI と評価ワークベンチ。`api/cli/evaluate.ts`、`api/cli/reevaluate.ts`、UI の Home/Settings が同じ評価 usecase を呼ぶ。\n- API は CLI と同じ usecase を呼ぶ。route は `api/routes/projects.route.ts` と `api/routes/evaluations.route.ts`。\n- 共有 schema は `shared/schemas/`。ProjectProfile、EvaluationPromptContext、ProjectEvaluationReport、EvaluationDelta、ImprovementIdea を Zod で定義する方向へ移行する。\n- Judge は `api/modules/llm/judge-client.ts`。現在の主経路は Codex SDK。OpenAI / Azure OpenAI / Local LLM は provider 抽象に残すが、未実装 adapter は `adapter-not-implemented` として扱う。\n- frontend は評価ワークベンチへ寄せる。Provider 設定は設定済み状態と実行可能状態を分けて表示する。\n\n## Core Flow\n\n```text\nProjectProfile\n  -> build EvaluationPromptContext\n  -> JudgeProviderAdapter\n  -> save ProjectEvaluationReport\n  -> compute EvaluationDelta\n  -> show ImprovementIdeas\n```\n\n## Top-Level Map\n\n| Path | Role |\n| --- | --- |\n| `api/app/hono.ts` | Hono middleware、API route、static fallback、`AppType` export |\n| `api/routes/projects.route.ts` | ProjectProfile 作成/取得、評価実行、再評価 |\n| `api/routes/evaluations.route.ts` | Evaluation / Improvement lookup |\n| `api/modules/projects/` | Project repository / service |\n| `api/modules/evaluations/bundle-builder.ts` | 移行対象。baseline 評価では EvaluationPromptContext builder に縮小する |\n| `api/modules/evaluations/evaluation.service.ts` | prompt context 作成、judge、保存、delta、改善案生成を束ねる usecase |\n| `api/modules/evaluations/evaluation.repository.ts` | prompt context / report / raw output / delta / improvement 永続化 |\n| `api/modules/evaluations/improvement-generator.ts` | report の improvementIdeas を保存用 request に変換 |\n| `api/modules/llm/judge-client.ts` | Codex-first judge client。provider adapter 境界 |\n| `shared/schemas/project.schema.ts` | ProjectProfile と評価軸 |\n| `shared/schemas/evaluation.schema.ts` | prompt context / report / delta / provider schema |\n| `spec/` | Codex-first multi-agent evaluation implementation plan |\n\n## Implementation Contracts\n\n- 評価結果は `overallScore` だけで返さない。必ず dimension score、confidence、rationale、evidence、concerns、weaknesses、improvementIdeas を含める。\n- baseline prompt は evaluation report と一緒に保存する。\n- 前回比較は保存済み report から deterministic に計算する。\n- Codex を現在の主 judge とするが、OpenAI / Azure OpenAI / Local LLM の provider 抽象は削らない。\n- 未実装 provider は暗黙 fallback せず、`adapter-not-implemented` として扱う。\n- CLI と API は同じ `EvaluationService` を使う。評価ロジックを二重実装しない。\n- DB では JSON 配列を text JSON として保存してよい。検索や集計が必要になった時点で正規化する。\n- Hono route の request / response shape は `shared/schemas/` を優先する。\n- Auth はテンプレート由来で残っているが、MVP 評価 API の中心ではない。必要になるまで拡張しない。\n\n## Commands\n\n| Command | Purpose |\n| --- | --- |\n| `bun run db:migrate` | SQLite migration を適用 |\n| `bun run evaluator:evaluate -- --project <path>` | 評価、gap 分析、改善依頼生成 |\n| `bun run evaluator:reevaluate -- --project <path>` | 再評価して delta を表示 |\n| `bun run typecheck` | TypeScript check |\n| `bun run lint` | Biome lint |\n| `bun run format:check` | Biome format check |\n| `bun run test` | Vitest |\n| `bun run build` | Vite production build |\n| `bun run verify` | full verification pipeline |\n\n## Verification Matrix\n\n| Change type | Minimum useful verification |\n| --- | --- |\n| Schema / domain model | `bun run typecheck` and targeted Vitest |\n| Prompt context / judge / improvement logic | `bunx vitest run api/modules/evaluations/evaluation.service.test.ts` |\n| DB schema / migration | `DATABASE_URL=/tmp/project-evaluator.sqlite bun run db:migrate` |\n| CLI flow | temp DB migration, then `evaluator:evaluate` and `evaluator:reevaluate` |\n| API flow | Hono `app.request` against `/api/projects` and `/api/projects/:id/evaluations` |\n| Broad change | `bun run verify` |\n\n## MVP Non-goals\n\n- Do not add automatic code improvement execution yet.\n- Do not remove non-Codex provider settings or schema support.\n- Do not run build/test/verify as part of baseline evaluation.\n- Do not claim audit-grade evidence without a separate explicit evidence collector.\n- Do not introduce a second API framework.\n",
+      "packageJson": {
+        "name": "project-value-evaluator",
+        "version": "1.0.0",
+        "description": "Project value evaluator that turns score gaps into improvement requests.",
+        "type": "module",
+        "author": "",
+        "license": "MIT",
+        "keywords": [
+          "hono",
+          "project-evaluation",
+          "coding-agents",
+          "typescript"
+        ],
+        "scripts": {
+          "dev": "bunx --bun vite",
+          "dev:vite": "vite",
+          "start": "bun run api/app/server.ts",
+          "auth:create-admin": "bun run api/cli/auth-create-admin.ts",
+          "evaluator:bundle": "bun run api/cli/bundle.ts",
+          "evaluator:evaluate": "bun run api/cli/evaluate.ts",
+          "evaluator:reevaluate": "bun run api/cli/reevaluate.ts",
+          "db:generate": "drizzle-kit generate",
+          "db:migrate": "bun run api/cli/migrate.ts",
+          "db:migrate:drizzle": "drizzle-kit migrate",
+          "test": "vitest run",
+          "test:watch": "vitest",
+          "typecheck": "tsc --noEmit",
+          "lint": "biome lint api web shared",
+          "format": "biome format --write api web shared",
+          "format:check": "biome format api web shared",
+          "build:web": "vite build",
+          "build": "bun run build:web",
+          "verify": "bun scripts/verify.ts",
+          "verify:strict": "bun run verify"
+        },
+        "files": [
+          "dist-web",
+          "README.md",
+          "LICENSE.md",
+          "package.json"
+        ],
+        "dependencies": {
+          "@hono/zod-validator": "0.8.0",
+          "@openai/codex-sdk": "^0.142.3",
+          "@tanstack/react-query": "5.101.0",
+          "@tanstack/react-router": "1.170.15",
+          "@tanstack/react-table": "8.21.3",
+          "drizzle-orm": "0.45.2",
+          "hono": "4.12.25",
+          "jose": "6.2.3",
+          "lucide-react": "1.18.0",
+          "react": "19.2.7",
+          "react-dom": "19.2.7",
+          "react-hook-form": "^7.79.0",
+          "zod": "4.4.3"
+        },
+        "devDependencies": {
+          "@biomejs/biome": "2.5.0",
+          "@hono/vite-dev-server": "0.26.0",
+          "@tailwindcss/vite": "^4.3.1",
+          "@types/bun": "1.3.14",
+          "@types/node": "25.9.3",
+          "@types/react": "19.2.17",
+          "@types/react-dom": "19.2.3",
+          "@vitejs/plugin-react": "6.0.2",
+          "drizzle-kit": "0.31.10",
+          "tailwindcss": "^4.3.1",
+          "typescript": "5.9.3",
+          "vite": "8.0.16",
+          "vitest": "4.1.8"
+        },
+        "overrides": {
+          "esbuild": "0.28.1",
+          "picomatch": "4.0.4",
+          "postcss": "8.5.15",
+          "rollup": "4.62.0",
+          "undici": "7.27.2",
+          "vite": "8.0.16",
+          "ws": "8.21.0"
+        }
+      },
+      "repoTree": [
+        ".dockerignore",
+        ".env.example",
+        ".gitignore",
+        ".husky/",
+        ".husky/pre-commit",
+        ".husky/pre-push",
+        "api/",
+        "api/app/",
+        "api/app/env.test.ts",
+        "api/app/env.ts",
+        "api/app/hono.test.ts",
+        "api/app/hono.ts",
+        "api/app/server.ts",
+        "api/cli/",
+        "api/cli/auth-create-admin.ts",
+        "api/cli/bundle.ts",
+        "api/cli/evaluate.ts",
+        "api/cli/evaluator-runtime.ts",
+        "api/cli/migrate.ts",
+        "api/cli/reevaluate.ts",
+        "api/config/",
+        "api/config/appDefaults.ts",
+        "api/db/",
+        "api/db/index.ts",
+        "api/db/schema.ts",
+        "api/middleware/",
+        "api/middleware/auth.test.ts",
+        "api/middleware/auth.ts",
+        "api/modules/",
+        "api/modules/auth/",
+        "api/modules/auth/auth-cookies.test.ts",
+        "api/modules/auth/auth-cookies.ts",
+        "api/modules/auth/auth.service.test.ts",
+        "api/modules/auth/auth.service.ts",
+        "api/modules/auth/context.test.ts",
+        "api/modules/auth/context.ts",
+        "api/modules/auth/errors.test.ts",
+        "api/modules/auth/errors.ts",
+        "api/modules/auth/password.test.ts",
+        "api/modules/auth/password.ts",
+        "api/modules/auth/token.service.test.ts",
+        "api/modules/auth/token.service.ts",
+        "api/modules/auth/types.test.ts",
+        "api/modules/auth/types.ts",
+        "api/modules/evaluations/",
+        "api/modules/evaluations/bundle-builder.ts",
+        "api/modules/evaluations/evaluation.repository.ts",
+        "api/modules/evaluations/evaluation.service.test.ts",
+        "api/modules/evaluations/evaluation.service.ts",
+        "api/modules/evaluations/improvement-generator.ts",
+        "api/modules/evaluations/score-utils.ts",
+        "api/modules/llm/",
+        "api/modules/llm/judge-client.test.ts",
+        "api/modules/llm/judge-client.ts",
+        "api/modules/projects/",
+        "api/modules/projects/project.repository.ts",
+        "api/modules/projects/project.service.test.ts",
+        "api/modules/projects/project.service.ts",
+        "api/routes/",
+        "api/routes/auth.route.test.ts",
+        "api/routes/auth.route.ts",
+        "api/routes/codex.route.ts",
+        "api/routes/evaluations.route.test.ts",
+        "api/routes/evaluations.route.ts",
+        "api/routes/health.route.test.ts",
+        "api/routes/health.route.ts",
+        "api/routes/projects.route.test.ts",
+        "api/routes/projects.route.ts",
+        "api/routes/system.route.test.ts",
+        "api/routes/system.route.ts",
+        "api/types/",
+        "api/types/hono-context.d.ts",
+        "biome.json",
+        "bun.lock",
+        "bunfig.toml",
+        "docs/",
+        "docs/template-variant-management.md",
+        "drizzle/",
+        "drizzle/0001_auth.sql",
+        "drizzle/0002_project_evaluator.sql",
+        "drizzle/0003_source_inspections.sql",
+        "drizzle/0004_project_soft_delete.sql",
+        "drizzle/0005_evaluation_activity_events.sql",
+        "drizzle/0006_evaluation_report_delta.sql",
+        "drizzle.config.ts",
+        "LICENSE.md",
+        "LLM_CONTEXT.md",
+        "package.json",
+        "README.md",
+        "scripts/",
+        "scripts/verify.ts",
+        "shared/",
+        "shared/schemas/",
+        "shared/schemas/auth.schema.ts",
+        "shared/schemas/evaluation.schema.ts",
+        "shared/schemas/improvement.schema.ts",
+        "shared/schemas/project.schema.ts",
+        "spec/",
+        "spec/baselines/",
+        "spec/baselines/2026-06-28-current-evaluator-baseline.json",
+        "spec/baselines/2026-06-28-new-report-baseline.json",
+        "spec/codex-first-multi-agent-evaluation-implementation-plan.md",
+        "tsconfig.build.json",
+        "tsconfig.json",
+        "vite.config.ts",
+        "vitest.config.ts",
+        "web/",
+        "web/index.html",
+        "web/src/",
+        "web/src/api.ts",
+        "web/src/App.tsx",
+        "web/src/auth-context.tsx",
+        "web/src/domains/",
+        "web/src/domains/auth/",
+        "web/src/judge-settings-context.tsx",
+        "web/src/main.tsx",
+        "web/src/router.tsx",
+        "web/src/routes/",
+        "web/src/routes/home-route.tsx",
+        "web/src/routes/login-route.tsx",
+        "web/src/routes/root-route.tsx",
+        "web/src/routes/settings-route.tsx",
+        "web/src/routes/showcase-route.tsx",
+        "web/src/showcase-settings-context.tsx",
+        "web/src/showcase-table-search.ts",
+        "web/src/styles.css",
+        "web/src/ui-language-context.tsx",
+        "web/src/views/",
+        "web/src/views/home-view.tsx",
+        "web/src/views/login-view.tsx",
+        "web/src/views/settings-view.tsx",
+        "web/src/views/showcase-view.tsx",
+        "wiki-knowledge/",
+        "wiki-knowledge/pages/",
+        "wiki-knowledge/pages/tech/",
+        "wiki-knowledge/pages/tech/index.md",
+        "wiki-knowledge/wiki/"
+      ],
+      "scripts": {
+        "dev": "bunx --bun vite",
+        "dev:vite": "vite",
+        "start": "bun run api/app/server.ts",
+        "auth:create-admin": "bun run api/cli/auth-create-admin.ts",
+        "evaluator:bundle": "bun run api/cli/bundle.ts",
+        "evaluator:evaluate": "bun run api/cli/evaluate.ts",
+        "evaluator:reevaluate": "bun run api/cli/reevaluate.ts",
+        "db:generate": "drizzle-kit generate",
+        "db:migrate": "bun run api/cli/migrate.ts",
+        "db:migrate:drizzle": "drizzle-kit migrate",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit",
+        "lint": "biome lint api web shared",
+        "format": "biome format --write api web shared",
+        "format:check": "biome format api web shared",
+        "build:web": "vite build",
+        "build": "bun run build:web",
+        "verify": "bun scripts/verify.ts",
+        "verify:strict": "bun run verify"
+      },
+      "sourceInspectionPlan": [],
+      "sourceFiles": [],
+      "verificationRuns": [],
+      "previousEvaluation": {
+        "id": "a7e074d4-09ef-43f1-bbb0-b8904001a8d2",
+        "projectId": "50e0289c-3458-4661-b8c4-3a3563175d45",
+        "bundleId": "ad2bc9eb-3731-4823-b590-ecbd74076544",
+        "score": 82,
+        "idealScore": 100,
+        "overallConfidence": 0.82,
+        "evidenceLevel": "runtime-verified",
+        "summary": "ProjectValueEvaluator は、coding agents がプロジェクト価値を評価し、差分と改善候補を保存するための MVP としてかなり実用段階に近い。CLI/API/DB/評価サービス/改善生成/検証パイプラインが接続され、`bun run verify` も成功している。一方で、README/LLM_CONTEXT の Evidence Policy と実装の自動 verify 実行に不整合があり、Codex judge 境界や実際のサンプル出力・UI 操作は今回の bundle では十分確認できていない。",
+        "dimensions": [
+          {
+            "key": "conceptValue",
+            "score": 88,
+            "confidence": 0.88,
+            "rationale": "普段の曖昧な価値評価依頼を、rubric、schema、保存履歴、差分、改善依頼へ固定化する狙いは primaryAudience の coding agents に明確に合っている。",
+            "evidenceRefs": [
+              "README.md",
+              "LLM_CONTEXT.md",
+              "api/modules/evaluations/evaluation.service.ts",
+              "api/modules/evaluations/improvement-generator.ts"
+            ],
+            "caveats": [
+              "実際の利用者が評価結果をどの程度改善実装に使えるかはサンプル出力未確認。"
+            ]
+          },
+          {
+            "key": "implementationCompleteness",
+            "score": 79,
+            "confidence": 0.82,
+            "rationale": "CLI、API、bundle 生成、評価保存、改善依頼生成、SQLite 永続化、verify が揃っており MVP 中核は実装済み。ただし provider adapter の実装詳細と UI 実行確認は今回未確認。",
+            "evidenceRefs": [
+              "api/cli/evaluate.ts",
+              "api/cli/bundle.ts",
+              "api/modules/evaluations/evaluation.service.ts",
+              "api/modules/evaluations/evaluation.repository.ts",
+              "verificationRuns.verify"
+            ],
+            "caveats": [
+              "`api/modules/llm/judge-client.ts` は repoTree にあるが sourceFiles 抜粋では未確認。"
+            ]
+          },
+          {
+            "key": "architectureQuality",
+            "score": 84,
+            "confidence": 0.84,
+            "rationale": "ProjectService、EvaluationService、Repository、shared schemas、CLI/API の分離があり、評価 usecase を中心にした構成は読みやすい。永続化も transaction で束ねられている。",
+            "evidenceRefs": [
+              "api/modules/evaluations/evaluation.service.ts",
+              "api/modules/evaluations/evaluation.repository.ts",
+              "api/db/schema.ts",
+              "shared/schemas/evaluation.schema.ts"
+            ],
+            "caveats": [
+              "bundle-builder が収集、分類、検証実行を多く抱えており、今後 evidence collector 化する余地がある。"
+            ]
+          },
+          {
+            "key": "maintainability",
+            "score": 81,
+            "confidence": 0.8,
+            "rationale": "TypeScript/Zod/Drizzle による境界の明示、verify スクリプト、テスト群の存在により保守しやすい。ただし bundle-builder は責務が広く、README と実装方針の不一致が保守上の混乱要因。",
+            "evidenceRefs": [
+              "api/modules/evaluations/bundle-builder.ts",
+              "api/modules/evaluations/evaluation.service.ts",
+              "api/db/schema.ts",
+              "package.json"
+            ],
+            "caveats": [
+              "sourceFiles はサンプルであり、全量の循環依存や未使用コードは未確認。"
+            ]
+          },
+          {
+            "key": "security",
+            "score": 72,
+            "confidence": 0.7,
+            "rationale": "JWT/cookie/refresh token/認証 middleware があり、SQLite URL を file path に制限するなど基本境界はある。評価ワークフロー固有のパスアクセス、LLM 境界、CLI 入力の監査級確認は不足している。",
+            "evidenceRefs": [
+              "api/middleware/auth.ts",
+              "api/modules/auth/auth-cookies.ts",
+              "api/modules/auth/auth.service.ts",
+              "api/db/index.ts"
+            ],
+            "caveats": [
+              "監査級のセキュリティ挙動は bundle 自身も未検証としている。"
+            ]
+          },
+          {
+            "key": "testability",
+            "score": 87,
+            "confidence": 0.9,
+            "rationale": "`bun run verify` が typecheck/lint/format/test/build を通して成功しており、repoTree に route/service/auth/llm 周辺のテストが多い。",
+            "evidenceRefs": [
+              "verificationRuns.verify",
+              "package.json",
+              "api/modules/evaluations/evaluation.service.test.ts",
+              "api/routes/projects.route.test.ts"
+            ],
+            "caveats": [
+              "テスト内容の網羅性までは抜粋だけでは確認していない。"
+            ]
+          },
+          {
+            "key": "documentation",
+            "score": 80,
+            "confidence": 0.82,
+            "rationale": "README と LLM_CONTEXT は目的、MVP、構成、CLI/API、検証コマンド、non-goals を具体的に説明している。一方で Evidence Policy は実装の verify 実行と食い違っている。",
+            "evidenceRefs": [
+              "README.md",
+              "LLM_CONTEXT.md",
+              "api/modules/evaluations/bundle-builder.ts"
+            ],
+            "caveats": [
+              "AGENTS.md は missingInputs で未提供。"
+            ]
+          },
+          {
+            "key": "agentUsability",
+            "score": 86,
+            "confidence": 0.84,
+            "rationale": "CLI の `--json`、profile 入力、評価結果・source checks・gaps・improvements の出力、改善依頼 prompt 生成があり、coding agents が次作業へ移りやすい。",
+            "evidenceRefs": [
+              "api/cli/evaluator-runtime.ts",
+              "api/cli/evaluate.ts",
+              "api/modules/evaluations/improvement-generator.ts"
+            ],
+            "caveats": [
+              "実際の JSON 出力サンプル品質は未レビュー。"
+            ]
+          },
+          {
+            "key": "extensibility",
+            "score": 80,
+            "confidence": 0.78,
+            "rationale": "JudgeSelection、provider adapter 境界、shared schemas、JSON 保存、dimension/gap ベースの改善生成により拡張余地はある。未実装 provider の扱いは設計上明示されているが、実装詳細は未確認。",
+            "evidenceRefs": [
+              "LLM_CONTEXT.md",
+              "api/modules/evaluations/evaluation.service.ts",
+              "api/modules/evaluations/improvement-generator.ts",
+              "api/db/schema.ts"
+            ],
+            "caveats": [
+              "Codex/OpenAI/Azure/Local LLM adapter の実装差分は確認できていない。"
+            ]
+          },
+          {
+            "key": "reliability",
+            "score": 79,
+            "confidence": 0.82,
+            "rationale": "評価実行は activity event を出し、bundle/evaluation/improvement を transaction で保存し、verify も成功している。失敗時に暗黙 fallback しない方針も良い。ただし appLaunch と sample output は未確認。",
+            "evidenceRefs": [
+              "api/modules/evaluations/evaluation.service.ts",
+              "api/modules/evaluations/evaluation.repository.ts",
+              "api/cli/evaluator-runtime.ts",
+              "verificationRuns.verify"
+            ],
+            "caveats": [
+              "実際の API サーバー起動、CLI 評価完走、judge 失敗時挙動は今回未確認。"
+            ]
+          },
+          {
+            "key": "strategicFit",
+            "score": 89,
+            "confidence": 0.86,
+            "rationale": "projectIdeal、primaryAudience、targetWorkflow に対して、評価、履歴、差分、改善候補生成に集中しており、non-goals も MVP に合っている。",
+            "evidenceRefs": [
+              "README.md",
+              "LLM_CONTEXT.md",
+              "api/modules/evaluations/evaluation.service.ts"
+            ],
+            "caveats": [
+              "Evidence Policy の方針差分を解消しないと、baseline と runtime-verified の位置づけが曖昧になる。"
+            ]
+          },
+          {
+            "key": "ossProductValue",
+            "score": 75,
+            "confidence": 0.74,
+            "rationale": "MIT、README、CLI/API、検証コマンド、ローカル SQLite 構成があり OSS として試せる形に近い。ただし judge 認証、サンプル成果物、導入後の具体例、UI 動作確認の公開証跡が不足している。",
+            "evidenceRefs": [
+              "package.json",
+              "README.md",
+              "api/cli/evaluate.ts",
+              "api/app/server.ts"
+            ],
+            "caveats": [
+              "配布パッケージとしての実運用手順や example evaluation は未確認。"
+            ]
+          }
+        ],
+        "strengths": [
+          "評価 bundle 生成、judge 実行、保存、改善依頼生成までの主経路が `EvaluationService` に集約されている。",
+          "SQLite + Drizzle で profile、bundle、evaluation、improvement、activity events を永続化しており、前回比較や履歴利用の土台がある。",
+          "CLI/API/README/LLM_CONTEXT が揃っており、coding agents が操作しやすいプロジェクト形状になっている。",
+          "`bun run verify` が typecheck/lint/format/test/build を通して成功しており、現時点の検証シグナルが強い。",
+          "改善依頼生成が gap の種類と影響 dimension から taskType、prompt、acceptanceCriteria、verificationCommands に落ちるため、次アクションに接続しやすい。"
+        ],
+        "gapsTo100": [
+          {
+            "id": "2a409880-cf99-43c4-b73b-95a55ca83796",
+            "title": "Evidence Policy と実装の自動 verify 実行の不整合を解消する",
+            "kind": "documentation-gap",
+            "affectedDimensions": [
+              "documentation",
+              "reliability",
+              "agentUsability",
+              "strategicFit"
+            ],
+            "currentEvidenceLevel": "runtime-verified",
+            "expectedScoreGain": 4,
+            "expectedConfidenceGain": 0.05,
+            "rationale": "README/LLM_CONTEXT は baseline 評価で build/test/verify を自動実行しないと説明しているが、bundle-builder は scripts.verify を選択して実行している。価値は高いが、利用者と agent にとって評価の証拠レベルが混乱する。"
+          },
+          {
+            "id": "0a56dee4-94c7-47bf-89b4-4b15c790ef66",
+            "title": "Judge provider 境界の実装証跡を評価 bundle に含める",
+            "kind": "evidence-gap",
+            "affectedDimensions": [
+              "implementationCompleteness",
+              "extensibility",
+              "reliability",
+              "security"
+            ],
+            "currentEvidenceLevel": "runtime-verified",
+            "expectedScoreGain": 5,
+            "expectedConfidenceGain": 0.08,
+            "rationale": "LLM_CONTEXT は Codex-first judge と未実装 adapter の扱いを重視しているが、今回の sourceFiles 抜粋には `api/modules/llm/judge-client.ts` が含まれていない。中核外部境界の確認不足が評価信頼度を下げている。"
+          },
+          {
+            "id": "14a0cf54-a5ed-4a66-82e0-bc7d764e54c4",
+            "title": "CLI/API/UI のサンプル出力を保存してレビュー可能にする",
+            "kind": "runtime-gap",
+            "affectedDimensions": [
+              "agentUsability",
+              "ossProductValue",
+              "reliability",
+              "testability"
+            ],
+            "currentEvidenceLevel": "runtime-verified",
+            "expectedScoreGain": 4,
+            "expectedConfidenceGain": 0.07,
+            "rationale": "verify は成功しているが、bundle の inspectedInputs では appLaunched と sampleOutputReviewed が false。coding agents 向け製品としては、実際の評価 JSON、改善依頼、UI 表示のサンプルが価値判断に必要。"
+          },
+          {
+            "id": "8d03c044-e942-4893-83e6-4be56228d1f2",
+            "title": "評価対象 rootPath とファイルアクセス境界の安全性を確認する",
+            "kind": "evidence-gap",
+            "affectedDimensions": [
+              "security",
+              "reliability"
+            ],
+            "currentEvidenceLevel": "runtime-verified",
+            "expectedScoreGain": 3,
+            "expectedConfidenceGain": 0.05,
+            "rationale": "認証や cookie の基本実装は確認できたが、任意 project path を読む評価サービスとしての path 境界、秘密情報除外、LLM 送信内容の制御は抜粋だけでは十分確認できない。"
+          },
+          {
+            "id": "f1bc6a9b-b642-48dc-b8a3-d931ee85d2c9",
+            "title": "bundle-builder の責務を evidence collector と prompt context builder に分ける",
+            "kind": "implementation-gap",
+            "affectedDimensions": [
+              "architectureQuality",
+              "maintainability",
+              "extensibility"
+            ],
+            "currentEvidenceLevel": "runtime-verified",
+            "expectedScoreGain": 3,
+            "expectedConfidenceGain": 0.04,
+            "rationale": "bundle-builder は tree 収集、source 選定、検証実行、notVerified 構築まで担っている。MVP では成立しているが、今後 runtime verification や audit-grade evidence を追加すると責務が膨らみやすい。"
+          }
+        ],
+        "sourceInspections": [
+          {
+            "checkId": "entrypoint-flow",
+            "title": "主要ワークフローへの実行経路",
+            "status": "passed",
+            "files": [
+              "api/cli/evaluate.ts",
+              "api/cli/bundle.ts",
+              "api/cli/evaluator-runtime.ts",
+              "api/modules/evaluations/evaluation.service.ts",
+              "api/app/server.ts",
+              "web/src/App.tsx",
+              "web/src/main.tsx"
+            ],
+            "findings": [
+              "CLI の evaluate/bundle は共通 runtime から ProjectService と EvaluationService を組み立て、中核 usecase に接続している。",
+              "server entrypoint は Hono app を Bun.serve に渡し、shutdown 時に DB 接続を閉じる経路を持つ。",
+              "React entrypoint は router と query client を構成しているが、評価 UI の詳細画面は今回の sourceFiles 抜粋では確認していない。"
+            ],
+            "evidenceRefs": [
+              "api/cli/evaluate.ts",
+              "api/cli/bundle.ts",
+              "api/cli/evaluator-runtime.ts",
+              "api/modules/evaluations/evaluation.service.ts",
+              "api/app/server.ts",
+              "web/src/App.tsx",
+              "web/src/main.tsx"
+            ]
+          },
+          {
+            "checkId": "domain-logic",
+            "title": "対象プロジェクトの中核ロジック",
+            "status": "passed",
+            "files": [
+              "api/modules/evaluations/bundle-builder.ts",
+              "api/modules/evaluations/evaluation.service.ts",
+              "api/modules/evaluations/improvement-generator.ts",
+              "api/cli/evaluator-runtime.ts"
+            ],
+            "findings": [
+              "EvaluationService が profile 読み込み、前回評価取得、bundle 生成、judge 実行、保存、改善依頼生成を一つの主経路として束ねている。",
+              "improvement-generator は gap を taskType、prompt、acceptanceCriteria、verificationCommands へ変換し、評価から次改善へつなげている。",
+              "bundle-builder は source inspection plan と sourceFiles を構築しているが、README の baseline Evidence Policy と verify 実行の挙動に不整合がある。"
+            ],
+            "evidenceRefs": [
+              "api/modules/evaluations/evaluation.service.ts",
+              "api/modules/evaluations/improvement-generator.ts",
+              "api/modules/evaluations/bundle-builder.ts",
+              "README.md",
+              "LLM_CONTEXT.md"
+            ]
+          },
+          {
+            "checkId": "data-persistence",
+            "title": "状態管理と再現性",
+            "status": "passed",
+            "files": [
+              "api/db/schema.ts",
+              "api/db/index.ts",
+              "api/modules/evaluations/evaluation.repository.ts",
+              "api/modules/projects/project.repository.ts"
+            ],
+            "findings": [
+              "projectProfiles、evaluationBundles、projectEvaluations、improvementRequests、evaluationActivityEvents が schema として定義され、履歴と改善依頼の保存先がある。",
+              "createEvaluationRun は bundle、evaluation、improvements、activity events を transaction で保存している。",
+              "JSON text 保存は MVP として妥当だが、後で横断集計する場合は一部正規化が必要になる。"
+            ],
+            "evidenceRefs": [
+              "api/db/schema.ts",
+              "api/modules/evaluations/evaluation.repository.ts",
+              "api/modules/projects/project.repository.ts",
+              "api/db/index.ts"
+            ]
+          },
+          {
+            "checkId": "external-boundary",
+            "title": "外部境界と失敗時挙動",
+            "status": "partial",
+            "files": [
+              "api/cli/auth-create-admin.ts",
+              "api/middleware/auth.ts",
+              "api/modules/auth/auth-cookies.ts",
+              "api/modules/auth/auth.service.ts",
+              "api/db/index.ts",
+              "api/cli/migrate.ts"
+            ],
+            "findings": [
+              "認証 middleware は Bearer/cookie token を検証し、非 active user を拒否している。",
+              "auth cookie は httpOnly、secure、sameSite、path を設定しており、refresh cookie は `/api/auth` に限定している。",
+              "SQLite 接続は network database URL を拒否する。",
+              "評価の最重要外部境界である Codex/LLM judge client は今回の sourceFiles 抜粋に含まれず、provider 失敗時挙動は部分確認に留まる。"
+            ],
+            "evidenceRefs": [
+              "api/middleware/auth.ts",
+              "api/modules/auth/auth-cookies.ts",
+              "api/modules/auth/auth.service.ts",
+              "api/db/index.ts",
+              "api/cli/migrate.ts"
+            ]
+          },
+          {
+            "checkId": "verification-signal",
+            "title": "検証可能性",
+            "status": "passed",
+            "files": [
+              "web/src/App.tsx",
+              "web/src/main.tsx",
+              "api/cli/evaluator-runtime.ts"
+            ],
+            "findings": [
+              "`bun run verify` が typecheck、lint、format、test、build をすべて成功させている。",
+              "package scripts に個別検証コマンドと verify が定義されている。",
+              "repoTree には service、route、auth、llm 周辺の test files が多数あり、検証文化は強い。"
+            ],
+            "evidenceRefs": [
+              "verificationRuns.verify",
+              "package.json",
+              "repoTree"
+            ]
+          },
+          {
+            "checkId": "agent-output-contract",
+            "title": "利用者へ渡る操作・出力契約",
+            "status": "partial",
+            "files": [
+              "api/cli/evaluator-runtime.ts",
+              "api/modules/evaluations/improvement-generator.ts",
+              "api/modules/evaluations/evaluation.repository.ts",
+              "api/db/schema.ts"
+            ],
+            "findings": [
+              "CLI は JSON 出力と人間向け出力を分け、score、confidence、verification runs、source checks、top gaps、next improvements を表示する。",
+              "改善依頼は gap 由来の prompt、acceptance criteria、verification commands を持ち、coding agents が次タスクへ移りやすい。",
+              "sampleOutputReviewed が false のため、実際の出力が agent にとって十分読みやすいかは未確認。"
+            ],
+            "evidenceRefs": [
+              "api/cli/evaluator-runtime.ts",
+              "api/modules/evaluations/improvement-generator.ts",
+              "api/modules/evaluations/evaluation.repository.ts",
+              "api/db/schema.ts",
+              "inspectedInputs.sampleOutputReviewed"
+            ]
+          }
+        ],
+        "notVerified": [
+          "アプリサーバーを実際に起動して API/UI を操作する確認。",
+          "`api/modules/llm/judge-client.ts` の Codex SDK 境界、未実装 provider の失敗挙動、raw output handling。",
+          "CLI の `evaluator:evaluate --json` と `evaluator:reevaluate --json` の実サンプル出力品質。",
+          "ソースコード全量の監査、特に path 読み取り、秘密情報除外、LLM 送信データ制御。",
+          "監査級のセキュリティ挙動。",
+          "AGENTS.md は missingInputs で未確認。"
+        ],
+        "nextEvidenceToCollect": [
+          "一時 SQLite DB で migration から `evaluator:evaluate --json`、`evaluator:reevaluate --json` まで実行し、成果物 JSON を保存する。",
+          "Hono `app.request` で project 作成、evaluation 実行、latest/improvements 取得の API サンプルを確認する。",
+          "`api/modules/llm/judge-client.ts` とその test を source inspection 対象に追加し、provider 失敗時の出力契約を確認する。",
+          "UI を起動して Home/Settings の評価ワークフローを操作し、スクリーンショットまたは DOM レベルで確認する。",
+          "Evidence Policy を更新するか、baseline 評価で verify を実行しない構成へ分けたうえで、bundle の evidenceLevel と notVerified の意味を再確認する。"
+        ],
+        "createdAt": "2026-06-28T05:59:19.000Z"
+      }
+    },
+    "inspectedInputs": {
+      "readme": true,
+      "llmContext": true,
+      "agents": false,
+      "packageJson": true,
+      "repoTree": true,
+      "sourceFilesSampled": [],
+      "testsExecuted": false,
+      "buildExecuted": false,
+      "appLaunched": false,
+      "sampleOutputReviewed": false
+    },
+    "missingInputs": [
+      "AGENTS.md"
+    ],
+    "notVerified": [
+      "ローカルビルド",
+      "テスト実行",
+      "ランタイム挙動",
+      "ソースコード全量の監査",
+      "サンプル出力の品質",
+      "監査級のセキュリティ挙動"
+    ],
+    "createdAt": "2026-06-28T06:10:26.000Z"
+  },
+  "evaluation": {
+    "id": "06a758f2-dff4-470e-bc54-4e2d57484165",
+    "projectId": "50e0289c-3458-4661-b8c4-3a3563175d45",
+    "bundleId": "7e9b2ea5-d401-48d2-a2ca-d1fa468eb16d",
+    "score": 83,
+    "idealScore": 100,
+    "overallConfidence": 0.78,
+    "evidenceLevel": "repo-structure",
+    "summary": "ProjectValueEvaluator は、coding agents 向けにプロジェクト価値評価を固定スキーマ、履歴、前回差分、改善案へ落とし込むという用途が明確で、baselinePrompt との整合も高いです。CLI/API/共有 schema/SQLite 永続化/テスト配置まで揃っており、MVP としての実用性は十分あります。一方で、提供コンテキスト上は移行途中であり、実際の verify 実行、provider adapter の実働境界、rootPath 安全性、UI/API/CLI の実行証跡は未確認です。",
+    "dimensions": [
+      {
+        "key": "conceptValue",
+        "score": 89,
+        "confidence": 0.84,
+        "rationale": "普段の曖昧な価値評価依頼を、再利用可能な評価 context、rubric、schema、履歴、改善案に変換する設計は対象ユーザーである coding agents に直接価値があります。",
+        "evidenceRefs": [
+          "baseline prompt が README と LLM_CONTEXT で明示されている",
+          "ProjectProfile から EvaluationPromptContext、report、delta、improvementIdeas、saved history へ進む流れが定義されている",
+          "primaryAudience と targetWorkflow が coding agents の評価・改善生成に一致している"
+        ],
+        "caveats": [
+          "価値評価そのものの品質は judge 出力に大きく依存する",
+          "OSS としての差別化は、実例や比較可能な出力がないと伝わりにくい"
+        ]
+      },
+      {
+        "key": "implementationCompleteness",
+        "score": 82,
+        "confidence": 0.76,
+        "rationale": "CLI、API route、DB migration、repository/service、judge client、frontend view、テストが揃っており MVP の骨格は実装済みに見えます。ただし README が移行途中と明記しており、未実装 provider は adapter-not-implemented 扱いです。",
+        "evidenceRefs": [
+          "api/cli/evaluate.ts と reevaluate.ts が存在する",
+          "projects/evaluations route と service/repository がある",
+          "drizzle migration が 0006 まで存在する",
+          "evaluation.service.test.ts や route test が配置されている"
+        ],
+        "caveats": [
+          "提供コンテキストだけでは CLI/API/UI の実働成功は確認できない",
+          "OpenAI、Azure、Local LLM adapter は拡張点として残るが実装完了ではない"
+        ]
+      },
+      {
+        "key": "architectureQuality",
+        "score": 84,
+        "confidence": 0.79,
+        "rationale": "ProjectProfile、EvaluationPromptContext、JudgeProviderAdapter、ProjectEvaluationReport、EvaluationDelta を分け、CLI と API が同じ EvaluationService を使う方針は妥当です。schema を shared に寄せる構造も良いです。",
+        "evidenceRefs": [
+          "api/modules/projects、api/modules/evaluations、api/modules/llm に責務が分離されている",
+          "shared/schemas に project/evaluation/improvement schema が配置されている",
+          "LLM_CONTEXT が CLI と API の同一 usecase 利用を契約として明記している"
+        ],
+        "caveats": [
+          "bundle-builder が移行対象として残っており責務境界がまだ揺れている",
+          "frontend、auth、evaluation の境界がテンプレート由来要素と混在している可能性がある"
+        ]
+      },
+      {
+        "key": "maintainability",
+        "score": 82,
+        "confidence": 0.77,
+        "rationale": "TypeScript、Zod、Drizzle、Hono route、Vitest、Biome による保守基盤は整っています。LLM_CONTEXT と README の契約も保守に効きますが、移行途中の設計文書依存が残っています。",
+        "evidenceRefs": [
+          "typecheck、lint、format:check、test、build、verify scripts が定義されている",
+          "README が主要 path と役割を表にしている",
+          "spec に実装計画が置かれている"
+        ],
+        "caveats": [
+          "source truth が spec と README に分散している",
+          "移行途中の module 名や責務が将来の変更時に混乱を生む可能性がある"
+        ]
+      },
+      {
+        "key": "security",
+        "score": 74,
+        "confidence": 0.67,
+        "rationale": "rootPath を扱う評価サービスであり、provider credentials とローカルファイル参照境界が重要ですが、提供コンテキストでは安全性の実装証跡が限定的です。Auth は残っていますが MVP 中心ではないとされます。",
+        "evidenceRefs": [
+          "auth middleware と auth module のテストが存在する",
+          "jose 依存と auth route がある",
+          ".env.example と provider 設定が想定されている"
+        ],
+        "caveats": [
+          "評価対象 rootPath のアクセス制限や path traversal 対策は未確認",
+          "Codex/OpenAI/Azure/Local LLM の credential 取り扱いは実装詳細未確認",
+          "baseline 評価で source inspection を自動実行しない方針は安全寄りだが、将来の evidence collector 境界が重要"
+        ]
+      },
+      {
+        "key": "testability",
+        "score": 86,
+        "confidence": 0.8,
+        "rationale": "module、route、auth、judge-client にテストが配置され、変更種別ごとの verification matrix もあります。評価ロジックの中心に targeted Vitest が指定されている点は強いです。",
+        "evidenceRefs": [
+          "evaluation.service.test.ts、judge-client.test.ts、projects.route.test.ts、evaluations.route.test.ts が存在する",
+          "bun run verify が full verification pipeline として定義されている",
+          "LLM_CONTEXT に変更種別別の最小検証が明記されている"
+        ],
+        "caveats": [
+          "今回のレビューでは実際にテストを実行していない",
+          "LLM provider 実通信や Codex SDK 周辺の統合テスト有無は未確認"
+        ]
+      },
+      {
+        "key": "documentation",
+        "score": 83,
+        "confidence": 0.82,
+        "rationale": "README と LLM_CONTEXT が目的、MVP flow、API、CLI、Evidence Policy、検証コマンドを明確に説明しています。agent が読む文脈としては十分整理されています。",
+        "evidenceRefs": [
+          "README に MVP、構成、セットアップ、CLI、API、検証、non-goals がある",
+          "LLM_CONTEXT に repository snapshot、contracts、verification matrix がある",
+          "spec/codex-first-multi-agent-evaluation-implementation-plan.md が参照されている"
+        ],
+        "caveats": [
+          "実行例の保存済み JSON やスクリーンショットが提供コンテキストには少ない",
+          "移行途中であることが、初見利用者には完成度判断を難しくする"
+        ]
+      },
+      {
+        "key": "agentUsability",
+        "score": 88,
+        "confidence": 0.84,
+        "rationale": "coding agents が迷わず評価できるように、baseline prompt、context schema、commands、verification matrix、non-goals が明文化されています。JSON schema 化と CLI は agent workflow に特に合っています。",
+        "evidenceRefs": [
+          "baselinePrompt が固定されている",
+          "EvaluationPromptContext と ProjectEvaluationReport の契約が明示されている",
+          "CLI の --json と profile JSON 指定が説明されている"
+        ],
+        "caveats": [
+          "agent が実行結果を比較するためのサンプル artifact が少ない",
+          "未確認事項を notVerified に残す方針は良いが、collector との接続はまだ今後の課題"
+        ]
+      },
+      {
+        "key": "extensibility",
+        "score": 82,
+        "confidence": 0.77,
+        "rationale": "provider adapter、dimension schema、profile JSON、text JSON 永続化により拡張余地はあります。MVP non-goals も適切に切られていますが、未実装 adapter が多い段階です。",
+        "evidenceRefs": [
+          "Codex を主 judge にしつつ OpenAI、Azure OpenAI、Local LLM の provider 抽象を残している",
+          "ProjectProfile で dimensions と nonGoals を扱う設計がある",
+          "DB では JSON 配列を text JSON として保存してよい方針がある"
+        ],
+        "caveats": [
+          "複数 provider voting や audit-grade collector は non-goal のため未提供",
+          "adapter-not-implemented の UX と将来実装のテスト契約は未確認"
+        ]
+      },
+      {
+        "key": "reliability",
+        "score": 80,
+        "confidence": 0.73,
+        "rationale": "保存履歴、delta 計算、repository 層、migration、verify script により信頼性の基礎はあります。ただし judge 実行は外部 SDK/provider に依存し、今回の入力だけでは失敗時挙動や再試行の堅牢性は判断できません。",
+        "evidenceRefs": [
+          "Saved history と EvaluationDelta が MVP flow に含まれる",
+          "evaluation.repository.ts と Drizzle migrations がある",
+          "未実装 provider を暗黙 fallback しない契約がある"
+        ],
+        "caveats": [
+          "Codex SDK 失敗時、JSON parse 失敗時、DB 書き込み失敗時の実挙動は未確認",
+          "verify 実行結果が提供されていない"
+        ]
+      },
+      {
+        "key": "strategicFit",
+        "score": 90,
+        "confidence": 0.85,
+        "rationale": "baselinePrompt を中心に、評価、比較、改善案生成を固定化する目的と実装構成が強く一致しています。対象ユーザーを coding agents に絞っている点も戦略的に明確です。",
+        "evidenceRefs": [
+          "projectIdeal が価値提供、実装、検証、文書、agent usability を明示している",
+          "targetWorkflow が evaluate project value and generate next improvements と定義されている",
+          "README と LLM_CONTEXT が同じ中核 flow を繰り返し説明している"
+        ],
+        "caveats": [
+          "人間向け SaaS ではなく agent-first に寄せているため、市場範囲は狭い",
+          "評価品質を高める evidence collector がまだ後続扱い"
+        ]
+      },
+      {
+        "key": "ossProductValue",
+        "score": 77,
+        "confidence": 0.72,
+        "rationale": "MIT、README、CLI/API、明確な niche により OSS として公開価値はあります。ただし、初見利用者がすぐ価値を体験できるサンプル出力、実行デモ、provider 設定の実働証跡は不足気味です。",
+        "evidenceRefs": [
+          "license が MIT",
+          "package keywords に project-evaluation と coding-agents がある",
+          "README に setup と CLI/API がある"
+        ],
+        "caveats": [
+          "公開利用者向けの quickstart 成功例が薄い",
+          "Codex SDK 依存と provider 設定が導入障壁になる可能性がある"
+        ]
+      }
+    ],
+    "strengths": [
+      "baseline prompt を中心に評価依頼を構造化し、履歴と改善案まで保存する価値が明確です。",
+      "CLI、API、shared schema、DB migration、frontend、テストが揃い、MVP の実装面はかなり具体化されています。",
+      "Evidence Policy により、LLM 評価と audit-grade evidence を混同しない設計判断ができています。",
+      "LLM_CONTEXT と README が agent 向けの実行契約、検証方針、non-goals を明確にしています。",
+      "未実装 provider を暗黙 fallback しない方針は、評価結果の信頼性に効きます。"
+    ],
+    "gapsTo100": [
+      {
+        "id": "a326237d-6349-45b9-a557-daf52adc2b27",
+        "title": "評価 artifact の実行サンプルを固定する",
+        "kind": "implementation-gap",
+        "affectedDimensions": [
+          "documentation",
+          "agentUsability",
+          "reliability",
+          "ossProductValue"
+        ],
+        "currentEvidenceLevel": "repo-structure",
+        "expectedScoreGain": 4,
+        "expectedConfidenceGain": 0.05,
+        "rationale": "CLI/API/UI が同じ評価 usecase を呼ぶことを、保存済み JSON とコマンド出力で確認できるようにすると、agent と人間の双方が価値を判断しやすくなります。"
+      },
+      {
+        "id": "d9c5241b-e178-4382-afdb-d50143801410",
+        "title": "rootPath と credential 境界の安全性を明文化する",
+        "kind": "implementation-gap",
+        "affectedDimensions": [
+          "security",
+          "reliability",
+          "documentation"
+        ],
+        "currentEvidenceLevel": "repo-structure",
+        "expectedScoreGain": 5,
+        "expectedConfidenceGain": 0.05,
+        "rationale": "評価対象 repo path と provider credential を扱うため、アクセス境界と秘密情報の扱いを明確にすると security と信頼性が上がります。"
+      },
+      {
+        "id": "be9c95ff-762a-491e-89a9-20554fcd4cd7",
+        "title": "bundle-builder の責務を分離する",
+        "kind": "implementation-gap",
+        "affectedDimensions": [
+          "architectureQuality",
+          "maintainability",
+          "extensibility"
+        ],
+        "currentEvidenceLevel": "repo-structure",
+        "expectedScoreGain": 3,
+        "expectedConfidenceGain": 0.05,
+        "rationale": "移行対象が残ると、baseline 評価と将来の evidence collector の境界が曖昧になりやすいです。"
+      },
+      {
+        "id": "ca3dea06-9b1c-46e2-bf62-0a59ca2b8c1d",
+        "title": "provider adapter の実働境界をテストで固定する",
+        "kind": "implementation-gap",
+        "affectedDimensions": [
+          "reliability",
+          "testability",
+          "agentUsability",
+          "extensibility"
+        ],
+        "currentEvidenceLevel": "repo-structure",
+        "expectedScoreGain": 4,
+        "expectedConfidenceGain": 0.05,
+        "rationale": "Codex-first 方針は明確ですが、未実装 provider の失敗表現と fallback 禁止が壊れると評価結果の信頼性が落ちます。"
+      },
+      {
+        "id": "beb14f1b-517f-4ac0-9a17-82233ab9370b",
+        "title": "README の quickstart を成功体験中心に補強する",
+        "kind": "implementation-gap",
+        "affectedDimensions": [
+          "documentation",
+          "ossProductValue",
+          "agentUsability"
+        ],
+        "currentEvidenceLevel": "repo-structure",
+        "expectedScoreGain": 3,
+        "expectedConfidenceGain": 0.05,
+        "rationale": "OSS として使う人が最短で価値を確認できる導線があると、導入障壁が下がります。"
+      }
+    ],
+    "sourceInspections": [],
+    "notVerified": [
+      "ファイル内容の追加 inspection は行っていません。",
+      "bun run verify、typecheck、lint、test、build は実行していません。",
+      "CLI、API、UI の実働は確認していません。",
+      "SQLite migration の適用可否は確認していません。",
+      "Codex SDK と provider adapter の実通信は確認していません。",
+      "rootPath validation と credential redaction の実装詳細は確認していません。"
+    ],
+    "nextEvidenceToCollect": [
+      "ファイル内容の追加 inspection は行っていません。",
+      "bun run verify、typecheck、lint、test、build は実行していません。",
+      "CLI、API、UI の実働は確認していません。",
+      "SQLite migration の適用可否は確認していません。",
+      "Codex SDK と provider adapter の実通信は確認していません。",
+      "rootPath validation と credential redaction の実装詳細は確認していません。"
+    ],
+    "previousScore": 82,
+    "scoreDelta": 1,
+    "previousConfidence": 0.82,
+    "confidenceDelta": -0.04,
+    "baselinePrompt": "このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください",
+    "judgeSettings": {
+      "provider": "codex",
+      "model": "gpt-5.5",
+      "codexMode": "review-only",
+      "status": "ready"
+    },
+    "report": {
+      "schemaVersion": "project-evaluation-report/v1",
+      "baselinePrompt": "このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください",
+      "judge": {
+        "provider": "codex",
+        "model": "gpt-5.5",
+        "mode": "review-only"
+      },
+      "overallScore": 83,
+      "confidence": 0.78,
+      "summary": "ProjectValueEvaluator は、coding agents 向けにプロジェクト価値評価を固定スキーマ、履歴、前回差分、改善案へ落とし込むという用途が明確で、baselinePrompt との整合も高いです。CLI/API/共有 schema/SQLite 永続化/テスト配置まで揃っており、MVP としての実用性は十分あります。一方で、提供コンテキスト上は移行途中であり、実際の verify 実行、provider adapter の実働境界、rootPath 安全性、UI/API/CLI の実行証跡は未確認です。",
+      "dimensions": [
+        {
+          "key": "conceptValue",
+          "label": "conceptValue",
+          "score": 89,
+          "confidence": 0.84,
+          "rationale": "普段の曖昧な価値評価依頼を、再利用可能な評価 context、rubric、schema、履歴、改善案に変換する設計は対象ユーザーである coding agents に直接価値があります。",
+          "evidence": [
+            "baseline prompt が README と LLM_CONTEXT で明示されている",
+            "ProjectProfile から EvaluationPromptContext、report、delta、improvementIdeas、saved history へ進む流れが定義されている",
+            "primaryAudience と targetWorkflow が coding agents の評価・改善生成に一致している"
+          ],
+          "concerns": [
+            "価値評価そのものの品質は judge 出力に大きく依存する",
+            "OSS としての差別化は、実例や比較可能な出力がないと伝わりにくい"
+          ]
+        },
+        {
+          "key": "implementationCompleteness",
+          "label": "implementationCompleteness",
+          "score": 82,
+          "confidence": 0.76,
+          "rationale": "CLI、API route、DB migration、repository/service、judge client、frontend view、テストが揃っており MVP の骨格は実装済みに見えます。ただし README が移行途中と明記しており、未実装 provider は adapter-not-implemented 扱いです。",
+          "evidence": [
+            "api/cli/evaluate.ts と reevaluate.ts が存在する",
+            "projects/evaluations route と service/repository がある",
+            "drizzle migration が 0006 まで存在する",
+            "evaluation.service.test.ts や route test が配置されている"
+          ],
+          "concerns": [
+            "提供コンテキストだけでは CLI/API/UI の実働成功は確認できない",
+            "OpenAI、Azure、Local LLM adapter は拡張点として残るが実装完了ではない"
+          ]
+        },
+        {
+          "key": "architectureQuality",
+          "label": "architectureQuality",
+          "score": 84,
+          "confidence": 0.79,
+          "rationale": "ProjectProfile、EvaluationPromptContext、JudgeProviderAdapter、ProjectEvaluationReport、EvaluationDelta を分け、CLI と API が同じ EvaluationService を使う方針は妥当です。schema を shared に寄せる構造も良いです。",
+          "evidence": [
+            "api/modules/projects、api/modules/evaluations、api/modules/llm に責務が分離されている",
+            "shared/schemas に project/evaluation/improvement schema が配置されている",
+            "LLM_CONTEXT が CLI と API の同一 usecase 利用を契約として明記している"
+          ],
+          "concerns": [
+            "bundle-builder が移行対象として残っており責務境界がまだ揺れている",
+            "frontend、auth、evaluation の境界がテンプレート由来要素と混在している可能性がある"
+          ]
+        },
+        {
+          "key": "maintainability",
+          "label": "maintainability",
+          "score": 82,
+          "confidence": 0.77,
+          "rationale": "TypeScript、Zod、Drizzle、Hono route、Vitest、Biome による保守基盤は整っています。LLM_CONTEXT と README の契約も保守に効きますが、移行途中の設計文書依存が残っています。",
+          "evidence": [
+            "typecheck、lint、format:check、test、build、verify scripts が定義されている",
+            "README が主要 path と役割を表にしている",
+            "spec に実装計画が置かれている"
+          ],
+          "concerns": [
+            "source truth が spec と README に分散している",
+            "移行途中の module 名や責務が将来の変更時に混乱を生む可能性がある"
+          ]
+        },
+        {
+          "key": "security",
+          "label": "security",
+          "score": 74,
+          "confidence": 0.67,
+          "rationale": "rootPath を扱う評価サービスであり、provider credentials とローカルファイル参照境界が重要ですが、提供コンテキストでは安全性の実装証跡が限定的です。Auth は残っていますが MVP 中心ではないとされます。",
+          "evidence": [
+            "auth middleware と auth module のテストが存在する",
+            "jose 依存と auth route がある",
+            ".env.example と provider 設定が想定されている"
+          ],
+          "concerns": [
+            "評価対象 rootPath のアクセス制限や path traversal 対策は未確認",
+            "Codex/OpenAI/Azure/Local LLM の credential 取り扱いは実装詳細未確認",
+            "baseline 評価で source inspection を自動実行しない方針は安全寄りだが、将来の evidence collector 境界が重要"
+          ]
+        },
+        {
+          "key": "testability",
+          "label": "testability",
+          "score": 86,
+          "confidence": 0.8,
+          "rationale": "module、route、auth、judge-client にテストが配置され、変更種別ごとの verification matrix もあります。評価ロジックの中心に targeted Vitest が指定されている点は強いです。",
+          "evidence": [
+            "evaluation.service.test.ts、judge-client.test.ts、projects.route.test.ts、evaluations.route.test.ts が存在する",
+            "bun run verify が full verification pipeline として定義されている",
+            "LLM_CONTEXT に変更種別別の最小検証が明記されている"
+          ],
+          "concerns": [
+            "今回のレビューでは実際にテストを実行していない",
+            "LLM provider 実通信や Codex SDK 周辺の統合テスト有無は未確認"
+          ]
+        },
+        {
+          "key": "documentation",
+          "label": "documentation",
+          "score": 83,
+          "confidence": 0.82,
+          "rationale": "README と LLM_CONTEXT が目的、MVP flow、API、CLI、Evidence Policy、検証コマンドを明確に説明しています。agent が読む文脈としては十分整理されています。",
+          "evidence": [
+            "README に MVP、構成、セットアップ、CLI、API、検証、non-goals がある",
+            "LLM_CONTEXT に repository snapshot、contracts、verification matrix がある",
+            "spec/codex-first-multi-agent-evaluation-implementation-plan.md が参照されている"
+          ],
+          "concerns": [
+            "実行例の保存済み JSON やスクリーンショットが提供コンテキストには少ない",
+            "移行途中であることが、初見利用者には完成度判断を難しくする"
+          ]
+        },
+        {
+          "key": "agentUsability",
+          "label": "agentUsability",
+          "score": 88,
+          "confidence": 0.84,
+          "rationale": "coding agents が迷わず評価できるように、baseline prompt、context schema、commands、verification matrix、non-goals が明文化されています。JSON schema 化と CLI は agent workflow に特に合っています。",
+          "evidence": [
+            "baselinePrompt が固定されている",
+            "EvaluationPromptContext と ProjectEvaluationReport の契約が明示されている",
+            "CLI の --json と profile JSON 指定が説明されている"
+          ],
+          "concerns": [
+            "agent が実行結果を比較するためのサンプル artifact が少ない",
+            "未確認事項を notVerified に残す方針は良いが、collector との接続はまだ今後の課題"
+          ]
+        },
+        {
+          "key": "extensibility",
+          "label": "extensibility",
+          "score": 82,
+          "confidence": 0.77,
+          "rationale": "provider adapter、dimension schema、profile JSON、text JSON 永続化により拡張余地はあります。MVP non-goals も適切に切られていますが、未実装 adapter が多い段階です。",
+          "evidence": [
+            "Codex を主 judge にしつつ OpenAI、Azure OpenAI、Local LLM の provider 抽象を残している",
+            "ProjectProfile で dimensions と nonGoals を扱う設計がある",
+            "DB では JSON 配列を text JSON として保存してよい方針がある"
+          ],
+          "concerns": [
+            "複数 provider voting や audit-grade collector は non-goal のため未提供",
+            "adapter-not-implemented の UX と将来実装のテスト契約は未確認"
+          ]
+        },
+        {
+          "key": "reliability",
+          "label": "reliability",
+          "score": 80,
+          "confidence": 0.73,
+          "rationale": "保存履歴、delta 計算、repository 層、migration、verify script により信頼性の基礎はあります。ただし judge 実行は外部 SDK/provider に依存し、今回の入力だけでは失敗時挙動や再試行の堅牢性は判断できません。",
+          "evidence": [
+            "Saved history と EvaluationDelta が MVP flow に含まれる",
+            "evaluation.repository.ts と Drizzle migrations がある",
+            "未実装 provider を暗黙 fallback しない契約がある"
+          ],
+          "concerns": [
+            "Codex SDK 失敗時、JSON parse 失敗時、DB 書き込み失敗時の実挙動は未確認",
+            "verify 実行結果が提供されていない"
+          ]
+        },
+        {
+          "key": "strategicFit",
+          "label": "strategicFit",
+          "score": 90,
+          "confidence": 0.85,
+          "rationale": "baselinePrompt を中心に、評価、比較、改善案生成を固定化する目的と実装構成が強く一致しています。対象ユーザーを coding agents に絞っている点も戦略的に明確です。",
+          "evidence": [
+            "projectIdeal が価値提供、実装、検証、文書、agent usability を明示している",
+            "targetWorkflow が evaluate project value and generate next improvements と定義されている",
+            "README と LLM_CONTEXT が同じ中核 flow を繰り返し説明している"
+          ],
+          "concerns": [
+            "人間向け SaaS ではなく agent-first に寄せているため、市場範囲は狭い",
+            "評価品質を高める evidence collector がまだ後続扱い"
+          ]
+        },
+        {
+          "key": "ossProductValue",
+          "label": "ossProductValue",
+          "score": 77,
+          "confidence": 0.72,
+          "rationale": "MIT、README、CLI/API、明確な niche により OSS として公開価値はあります。ただし、初見利用者がすぐ価値を体験できるサンプル出力、実行デモ、provider 設定の実働証跡は不足気味です。",
+          "evidence": [
+            "license が MIT",
+            "package keywords に project-evaluation と coding-agents がある",
+            "README に setup と CLI/API がある"
+          ],
+          "concerns": [
+            "公開利用者向けの quickstart 成功例が薄い",
+            "Codex SDK 依存と provider 設定が導入障壁になる可能性がある"
+          ]
+        }
+      ],
+      "strengths": [
+        "baseline prompt を中心に評価依頼を構造化し、履歴と改善案まで保存する価値が明確です。",
+        "CLI、API、shared schema、DB migration、frontend、テストが揃い、MVP の実装面はかなり具体化されています。",
+        "Evidence Policy により、LLM 評価と audit-grade evidence を混同しない設計判断ができています。",
+        "LLM_CONTEXT と README が agent 向けの実行契約、検証方針、non-goals を明確にしています。",
+        "未実装 provider を暗黙 fallback しない方針は、評価結果の信頼性に効きます。"
+      ],
+      "weaknesses": [
+        "実際の verify、CLI 実行、API 実行、UI 操作の証跡が今回の bundle には含まれていません。",
+        "provider adapter 境界は設計されていますが、Codex 以外の実装価値はまだ限定的です。",
+        "rootPath と provider credential 周辺の安全性は、提供コンテキストだけでは十分に確認できません。",
+        "bundle-builder が移行対象として残っており、責務境界の整理が未完了に見えます。",
+        "OSS 初見利用者向けのサンプル出力と成功パスがまだ弱いです。"
+      ],
+      "improvementIdeas": [
+        {
+          "title": "評価 artifact の実行サンプルを固定する",
+          "reason": "CLI/API/UI が同じ評価 usecase を呼ぶことを、保存済み JSON とコマンド出力で確認できるようにすると、agent と人間の双方が価値を判断しやすくなります。",
+          "expectedScoreImpact": 4,
+          "affectedDimensions": [
+            "documentation",
+            "agentUsability",
+            "reliability",
+            "ossProductValue"
+          ],
+          "suggestedPrompt": "CLI の --json 出力、reevaluate の delta 出力、API response の代表例を spec/baselines に保存し、README から参照できるようにしてください。",
+          "acceptanceCriteria": [
+            "evaluator:evaluate --json の代表出力が保存されている",
+            "reevaluate の delta を含む代表出力が保存されている",
+            "README からサンプル artifact へ辿れる"
+          ]
+        },
+        {
+          "title": "rootPath と credential 境界の安全性を明文化する",
+          "reason": "評価対象 repo path と provider credential を扱うため、アクセス境界と秘密情報の扱いを明確にすると security と信頼性が上がります。",
+          "expectedScoreImpact": 5,
+          "affectedDimensions": [
+            "security",
+            "reliability",
+            "documentation"
+          ],
+          "suggestedPrompt": "ProjectProfile の rootPath validation、許可 root、秘密情報の保存禁止、provider env の扱いを実装または仕様化し、テストで確認してください。",
+          "acceptanceCriteria": [
+            "rootPath validation の仕様またはテストがある",
+            "path traversal や存在しない path の扱いが明示されている",
+            "provider secret を report や raw output に含めない方針が確認できる"
+          ]
+        },
+        {
+          "title": "bundle-builder の責務を分離する",
+          "reason": "移行対象が残ると、baseline 評価と将来の evidence collector の境界が曖昧になりやすいです。",
+          "expectedScoreImpact": 3,
+          "affectedDimensions": [
+            "architectureQuality",
+            "maintainability",
+            "extensibility"
+          ],
+          "suggestedPrompt": "bundle-builder を EvaluationPromptContext builder と evidence collector 準備領域に分け、baseline 評価では自動 verify や source inspection を行わない契約をコード構造にも反映してください。",
+          "acceptanceCriteria": [
+            "baseline context builder の責務が名前と API で明確になっている",
+            "evidence collector 予定の責務が baseline path と混ざっていない",
+            "既存の評価 service test が通る前提の設計になっている"
+          ]
+        },
+        {
+          "title": "provider adapter の実働境界をテストで固定する",
+          "reason": "Codex-first 方針は明確ですが、未実装 provider の失敗表現と fallback 禁止が壊れると評価結果の信頼性が落ちます。",
+          "expectedScoreImpact": 4,
+          "affectedDimensions": [
+            "reliability",
+            "testability",
+            "agentUsability",
+            "extensibility"
+          ],
+          "suggestedPrompt": "Codex adapter、未実装 provider、JSON schema 不一致、provider error の代表ケースを judge-client test に追加し、暗黙 fallback が起きないことを保証してください。",
+          "acceptanceCriteria": [
+            "adapter-not-implemented のテストがある",
+            "provider error が report または明示エラーとして扱われる",
+            "暗黙 fallback が発生しないことを検証している"
+          ]
+        },
+        {
+          "title": "README の quickstart を成功体験中心に補強する",
+          "reason": "OSS として使う人が最短で価値を確認できる導線があると、導入障壁が下がります。",
+          "expectedScoreImpact": 3,
+          "affectedDimensions": [
+            "documentation",
+            "ossProductValue",
+            "agentUsability"
+          ],
+          "suggestedPrompt": "セットアップ後に一つのサンプル repo を評価し、出力 JSON、保存履歴、再評価 delta まで確認する quickstart を README に追加してください。",
+          "acceptanceCriteria": [
+            "初回セットアップから評価実行までの手順が一続きで書かれている",
+            "期待される出力の要点が示されている",
+            "失敗しやすい provider 設定の注意点がある"
+          ]
+        }
+      ],
+      "notVerified": [
+        "ファイル内容の追加 inspection は行っていません。",
+        "bun run verify、typecheck、lint、test、build は実行していません。",
+        "CLI、API、UI の実働は確認していません。",
+        "SQLite migration の適用可否は確認していません。",
+        "Codex SDK と provider adapter の実通信は確認していません。",
+        "rootPath validation と credential redaction の実装詳細は確認していません。"
+      ]
+    },
+    "delta": {
+      "previousEvaluationId": "a7e074d4-09ef-43f1-bbb0-b8904001a8d2",
+      "scoreDelta": 1,
+      "confidenceDelta": -0.04,
+      "dimensionDeltas": [
+        {
+          "key": "conceptValue",
+          "previousScore": 88,
+          "currentScore": 89,
+          "delta": 1
+        },
+        {
+          "key": "implementationCompleteness",
+          "previousScore": 79,
+          "currentScore": 82,
+          "delta": 3
+        },
+        {
+          "key": "architectureQuality",
+          "previousScore": 84,
+          "currentScore": 84,
+          "delta": 0
+        },
+        {
+          "key": "maintainability",
+          "previousScore": 81,
+          "currentScore": 82,
+          "delta": 1
+        },
+        {
+          "key": "security",
+          "previousScore": 72,
+          "currentScore": 74,
+          "delta": 2
+        },
+        {
+          "key": "testability",
+          "previousScore": 87,
+          "currentScore": 86,
+          "delta": -1
+        },
+        {
+          "key": "documentation",
+          "previousScore": 80,
+          "currentScore": 83,
+          "delta": 3
+        },
+        {
+          "key": "agentUsability",
+          "previousScore": 86,
+          "currentScore": 88,
+          "delta": 2
+        },
+        {
+          "key": "extensibility",
+          "previousScore": 80,
+          "currentScore": 82,
+          "delta": 2
+        },
+        {
+          "key": "reliability",
+          "previousScore": 79,
+          "currentScore": 80,
+          "delta": 1
+        },
+        {
+          "key": "strategicFit",
+          "previousScore": 89,
+          "currentScore": 90,
+          "delta": 1
+        },
+        {
+          "key": "ossProductValue",
+          "previousScore": 75,
+          "currentScore": 77,
+          "delta": 2
+        }
+      ],
+      "newWeaknesses": [
+        "実際の verify、CLI 実行、API 実行、UI 操作の証跡が今回の bundle には含まれていません。",
+        "provider adapter 境界は設計されていますが、Codex 以外の実装価値はまだ限定的です。",
+        "rootPath と provider credential 周辺の安全性は、提供コンテキストだけでは十分に確認できません。",
+        "bundle-builder が移行対象として残っており、責務境界の整理が未完了に見えます。",
+        "OSS 初見利用者向けのサンプル出力と成功パスがまだ弱いです。"
+      ],
+      "resolvedWeaknesses": [
+        "Evidence Policy と実装の自動 verify 実行の不整合を解消する",
+        "Judge provider 境界の実装証跡を評価 bundle に含める",
+        "CLI/API/UI のサンプル出力を保存してレビュー可能にする",
+        "評価対象 rootPath とファイルアクセス境界の安全性を確認する",
+        "bundle-builder の責務を evidence collector と prompt context builder に分ける"
+      ]
+    },
+    "createdAt": "2026-06-28T06:12:11.000Z"
+  },
+  "improvements": [
+    {
+      "id": "bb650539-92e0-4379-88fd-9e16b5744df1",
+      "evaluationId": "06a758f2-dff4-470e-bc54-4e2d57484165",
+      "title": "評価 artifact の実行サンプルを固定する",
+      "reason": "CLI/API/UI が同じ評価 usecase を呼ぶことを、保存済み JSON とコマンド出力で確認できるようにすると、agent と人間の双方が価値を判断しやすくなります。",
+      "sourceGapIds": [
+        "27c3d7ee-fb03-470d-8665-675367549aaa"
+      ],
+      "sourceDimensionKeys": [
+        "documentation",
+        "agentUsability",
+        "reliability",
+        "ossProductValue"
+      ],
+      "expectedScoreGain": 4,
+      "expectedConfidenceGain": 0.05,
+      "complexity": 2,
+      "priority": 1,
+      "taskType": "docs",
+      "prompt": "CLI の --json 出力、reevaluate の delta 出力、API response の代表例を spec/baselines に保存し、README から参照できるようにしてください。",
+      "acceptanceCriteria": [
+        "evaluator:evaluate --json の代表出力が保存されている",
+        "reevaluate の delta を含む代表出力が保存されている",
+        "README からサンプル artifact へ辿れる"
+      ],
+      "verificationCommands": [
+        "bun run typecheck",
+        "bun run test"
+      ],
+      "createdAt": "2026-06-28T06:12:11.000Z"
+    },
+    {
+      "id": "5a3df321-56bc-43a9-aa89-dff76bc85ca7",
+      "evaluationId": "06a758f2-dff4-470e-bc54-4e2d57484165",
+      "title": "rootPath と credential 境界の安全性を明文化する",
+      "reason": "評価対象 repo path と provider credential を扱うため、アクセス境界と秘密情報の扱いを明確にすると security と信頼性が上がります。",
+      "sourceGapIds": [
+        "e49aebc9-cb81-4691-b991-51e30c9c62f9"
+      ],
+      "sourceDimensionKeys": [
+        "security",
+        "reliability",
+        "documentation"
+      ],
+      "expectedScoreGain": 5,
+      "expectedConfidenceGain": 0.05,
+      "complexity": 2,
+      "priority": 2,
+      "taskType": "docs",
+      "prompt": "ProjectProfile の rootPath validation、許可 root、秘密情報の保存禁止、provider env の扱いを実装または仕様化し、テストで確認してください。",
+      "acceptanceCriteria": [
+        "rootPath validation の仕様またはテストがある",
+        "path traversal や存在しない path の扱いが明示されている",
+        "provider secret を report や raw output に含めない方針が確認できる"
+      ],
+      "verificationCommands": [
+        "bun run typecheck",
+        "bun run test"
+      ],
+      "createdAt": "2026-06-28T06:12:11.000Z"
+    },
+    {
+      "id": "abd39f67-eff1-42cf-88f8-24af92d1e1ad",
+      "evaluationId": "06a758f2-dff4-470e-bc54-4e2d57484165",
+      "title": "bundle-builder の責務を分離する",
+      "reason": "移行対象が残ると、baseline 評価と将来の evidence collector の境界が曖昧になりやすいです。",
+      "sourceGapIds": [
+        "2ad9599f-132f-4b0d-bafd-595ca3c5bd3d"
+      ],
+      "sourceDimensionKeys": [
+        "architectureQuality",
+        "maintainability",
+        "extensibility"
+      ],
+      "expectedScoreGain": 3,
+      "expectedConfidenceGain": 0.05,
+      "complexity": 2,
+      "priority": 3,
+      "taskType": "feature",
+      "prompt": "bundle-builder を EvaluationPromptContext builder と evidence collector 準備領域に分け、baseline 評価では自動 verify や source inspection を行わない契約をコード構造にも反映してください。",
+      "acceptanceCriteria": [
+        "baseline context builder の責務が名前と API で明確になっている",
+        "evidence collector 予定の責務が baseline path と混ざっていない",
+        "既存の評価 service test が通る前提の設計になっている"
+      ],
+      "verificationCommands": [
+        "bun run typecheck",
+        "bun run test"
+      ],
+      "createdAt": "2026-06-28T06:12:11.000Z"
+    },
+    {
+      "id": "db85dae3-655d-4f6c-a44f-38fa446bf29a",
+      "evaluationId": "06a758f2-dff4-470e-bc54-4e2d57484165",
+      "title": "provider adapter の実働境界をテストで固定する",
+      "reason": "Codex-first 方針は明確ですが、未実装 provider の失敗表現と fallback 禁止が壊れると評価結果の信頼性が落ちます。",
+      "sourceGapIds": [
+        "057c411b-99d5-45d2-88c6-f6d861750f53"
+      ],
+      "sourceDimensionKeys": [
+        "reliability",
+        "testability",
+        "agentUsability",
+        "extensibility"
+      ],
+      "expectedScoreGain": 4,
+      "expectedConfidenceGain": 0.05,
+      "complexity": 2,
+      "priority": 4,
+      "taskType": "agent-usability",
+      "prompt": "Codex adapter、未実装 provider、JSON schema 不一致、provider error の代表ケースを judge-client test に追加し、暗黙 fallback が起きないことを保証してください。",
+      "acceptanceCriteria": [
+        "adapter-not-implemented のテストがある",
+        "provider error が report または明示エラーとして扱われる",
+        "暗黙 fallback が発生しないことを検証している"
+      ],
+      "verificationCommands": [
+        "bun run typecheck",
+        "bun run test"
+      ],
+      "createdAt": "2026-06-28T06:12:11.000Z"
+    },
+    {
+      "id": "fb4dc5a7-278f-4cd9-86c6-2cd86e1e0b96",
+      "evaluationId": "06a758f2-dff4-470e-bc54-4e2d57484165",
+      "title": "README の quickstart を成功体験中心に補強する",
+      "reason": "OSS として使う人が最短で価値を確認できる導線があると、導入障壁が下がります。",
+      "sourceGapIds": [
+        "4556db5a-9c29-44d8-be83-b81c1f785882"
+      ],
+      "sourceDimensionKeys": [
+        "documentation",
+        "ossProductValue",
+        "agentUsability"
+      ],
+      "expectedScoreGain": 3,
+      "expectedConfidenceGain": 0.05,
+      "complexity": 2,
+      "priority": 5,
+      "taskType": "docs",
+      "prompt": "セットアップ後に一つのサンプル repo を評価し、出力 JSON、保存履歴、再評価 delta まで確認する quickstart を README に追加してください。",
+      "acceptanceCriteria": [
+        "初回セットアップから評価実行までの手順が一続きで書かれている",
+        "期待される出力の要点が示されている",
+        "失敗しやすい provider 設定の注意点がある"
+      ],
+      "verificationCommands": [
+        "bun run typecheck",
+        "bun run test"
+      ],
+      "createdAt": "2026-06-28T06:12:11.000Z"
+    }
+  ],
+  "activityEvents": [
+    {
+      "id": "14a4bd6a-4df2-4b1d-87cd-55e8cbee3373",
+      "seq": 0,
+      "createdAt": "2026-06-28T06:10:26.797Z",
+      "phase": "project",
+      "level": "info",
+      "source": "evaluator",
+      "message": "Loading project profile."
+    },
+    {
+      "id": "867fcf77-9e8a-4609-a964-d72e9f874e30",
+      "seq": 1,
+      "createdAt": "2026-06-28T06:10:26.798Z",
+      "phase": "history",
+      "level": "info",
+      "source": "evaluator",
+      "message": "Loading previous evaluation."
+    },
+    {
+      "id": "33143087-2962-4186-a27c-6ab9285b8255",
+      "seq": 2,
+      "createdAt": "2026-06-28T06:10:26.799Z",
+      "phase": "bundle",
+      "level": "info",
+      "source": "evaluator",
+      "message": "Building evaluation bundle and verification evidence."
+    },
+    {
+      "id": "7a2c5e49-d78f-4bc0-817a-7de402c597d6",
+      "seq": 3,
+      "createdAt": "2026-06-28T06:10:26.807Z",
+      "phase": "bundle",
+      "level": "checkpoint",
+      "source": "evaluator",
+      "message": "Prompt context ready for baseline evaluation.",
+      "payload": {
+        "evidenceLevel": "repo-structure",
+        "baselinePrompt": "このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください",
+        "judgeSettings": {
+          "provider": "codex",
+          "model": "gpt-5.5",
+          "codexMode": "review-only",
+          "status": "ready"
+        }
+      }
+    },
+    {
+      "id": "4bfd9c39-f034-48a7-a334-ef1dacf7459b",
+      "seq": 4,
+      "createdAt": "2026-06-28T06:10:26.807Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "evaluator",
+      "message": "Starting judge evaluation.",
+      "payload": {
+        "judge": {
+          "type": "codex-agent",
+          "model": "gpt-5.5",
+          "mode": "review-only"
+        }
+      }
+    },
+    {
+      "id": "a2b674ee-f922-448e-87c3-fafd5a7f5d76",
+      "seq": 5,
+      "createdAt": "2026-06-28T06:10:28.852Z",
+      "phase": "judge",
+      "level": "checkpoint",
+      "source": "codex",
+      "payload": {
+        "providerEvent": {
+          "type": "thread.started",
+          "thread_id": "019f0cd9-c828-7540-aeff-2f1d7053033f"
+        }
+      },
+      "message": "Codex thread started: 019f0cd9-c828-7540-aeff-2f1d7053033f.",
+      "status": "started"
+    },
+    {
+      "id": "1663a3e7-89cf-4e42-b65d-e212d17a29ec",
+      "seq": 6,
+      "createdAt": "2026-06-28T06:10:28.930Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "providerEvent": {
+          "type": "turn.started"
+        }
+      },
+      "message": "Codex turn started.",
+      "status": "started"
+    },
+    {
+      "id": "d456b023-cd25-436b-9e76-c19534309c3a",
+      "seq": 7,
+      "createdAt": "2026-06-28T06:10:37.462Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "initial_instructions",
+        "arguments": {},
+        "result": null,
+        "status": "in_progress",
+        "providerEvent": {
+          "type": "item.started",
+          "item": {
+            "id": "item_0",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "initial_instructions",
+            "arguments": {},
+            "result": null,
+            "error": null,
+            "status": "in_progress"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.started: context-still.initial_instructions",
+      "status": "in_progress"
+    },
+    {
+      "id": "33449bfe-d3b6-4625-9480-d34d160191ad",
+      "seq": 8,
+      "createdAt": "2026-06-28T06:10:37.468Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "initial_instructions",
+        "arguments": {},
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "## 常用ルール\n- 常に日本語で返答する。\n- まず `context_compile` を呼び、作業の主導線とする。`goal` を必ず渡し、適切な `changeTypes` / `technologies` を指定する。\n- `goal` は達成したい状態を1-3文で具体的に書き、設計書パスや `design.md` などの文書参照は含めない。\n- 次の応答がユーザーへの確認質問になりそうで、かつ自律的に続行できる余地がある場合は、質問する前に `context_decision` を pre-question gate として呼ぶ。\n- ブロッカー由来の判断が必要な場合、ユーザーに質問する前に `context_decision` を呼ぶ。例: このまま進めるか、修正して進めるか、reject/rollback/discard/escalate すべきか、PR作成前の判断、危険操作や未完了Todoの扱い。\n- `context_decision` が `reject` を返した場合は、その判断を停止条件として扱い、実装・変更・PR作成などの対象アクションを継続しない。必要な報告や確認待ちに切り替える。\n- `context_decision` に従った作業が完了し、結果が分かったら `context_decision_feedback` を保存する。成功/失敗/ユーザー上書き/回帰検出などの outcome は、完了直後または pre-commit 時点で分かる範囲で記録する。\n- ユーザーに情報を提示する際、それが本当に有用であるかを厳格に評価し、不確実な情報やノイズでコンテキストを圧迫しない。\n- 作業中に再利用可能なルールや手順（手続き）を確立した場合は、プロジェクト依存の記述を除いて汎用化し、`register_candidates` で登録する。\n- candidate 登録時は、単なる作業記録ではなく、他の文脈でも再利用できる知識として体裁を整える。\n- candidate 登録時の title / body / avoid / prefer の自然文は日本語で書く。識別子、API名、コマンド、URL、エラーメッセージは原文を保持してよい。\n- 手続き候補は SKILL.md 相当の形式が必須であり、`Use when:` / `Workflow:` / `Verification:` / `Avoid:` の見出しをこの順に含めないと登録できない。\n- 完了報告の前に、`context_compile` の実行回数と `compile_eval` の実行回数を自己申告する。また、各 runId ごとに `compile_eval` を1件以上保存する。ただし、`context_compile` が `No Content` を返した runId には保存しない。\n\n## MCPツール種別\n- `context_compile`: 作業前の最小コンテキスト生成（主導線）。\n- `context_decision`: ブロッカー由来の判断が必要な時に、ユーザーへ質問する前の実行/修正/拒否/巻き戻し等を判断。`reject` は停止条件として扱う。\n- `context_decision_feedback`: `context_decision` 後の作業結果を Good/Bad または system/AI outcome として保存。\n- `register_candidates`: 複数 candidate の一括登録。\n- `compile_eval`: `No Content` 以外の `context_compile` の作業後評価を保存。\n- `search_memory` / `fetch_memory`: 過去会話・差分の参照（補助）。\n- `doctor`: DB / embedding / automation / run health の診断。"
+            }
+          ],
+          "structured_content": null
+        },
+        "status": "completed",
+        "providerEvent": {
+          "type": "item.completed",
+          "item": {
+            "id": "item_0",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "initial_instructions",
+            "arguments": {},
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "## 常用ルール\n- 常に日本語で返答する。\n- まず `context_compile` を呼び、作業の主導線とする。`goal` を必ず渡し、適切な `changeTypes` / `technologies` を指定する。\n- `goal` は達成したい状態を1-3文で具体的に書き、設計書パスや `design.md` などの文書参照は含めない。\n- 次の応答がユーザーへの確認質問になりそうで、かつ自律的に続行できる余地がある場合は、質問する前に `context_decision` を pre-question gate として呼ぶ。\n- ブロッカー由来の判断が必要な場合、ユーザーに質問する前に `context_decision` を呼ぶ。例: このまま進めるか、修正して進めるか、reject/rollback/discard/escalate すべきか、PR作成前の判断、危険操作や未完了Todoの扱い。\n- `context_decision` が `reject` を返した場合は、その判断を停止条件として扱い、実装・変更・PR作成などの対象アクションを継続しない。必要な報告や確認待ちに切り替える。\n- `context_decision` に従った作業が完了し、結果が分かったら `context_decision_feedback` を保存する。成功/失敗/ユーザー上書き/回帰検出などの outcome は、完了直後または pre-commit 時点で分かる範囲で記録する。\n- ユーザーに情報を提示する際、それが本当に有用であるかを厳格に評価し、不確実な情報やノイズでコンテキストを圧迫しない。\n- 作業中に再利用可能なルールや手順（手続き）を確立した場合は、プロジェクト依存の記述を除いて汎用化し、`register_candidates` で登録する。\n- candidate 登録時は、単なる作業記録ではなく、他の文脈でも再利用できる知識として体裁を整える。\n- candidate 登録時の title / body / avoid / prefer の自然文は日本語で書く。識別子、API名、コマンド、URL、エラーメッセージは原文を保持してよい。\n- 手続き候補は SKILL.md 相当の形式が必須であり、`Use when:` / `Workflow:` / `Verification:` / `Avoid:` の見出しをこの順に含めないと登録できない。\n- 完了報告の前に、`context_compile` の実行回数と `compile_eval` の実行回数を自己申告する。また、各 runId ごとに `compile_eval` を1件以上保存する。ただし、`context_compile` が `No Content` を返した runId には保存しない。\n\n## MCPツール種別\n- `context_compile`: 作業前の最小コンテキスト生成（主導線）。\n- `context_decision`: ブロッカー由来の判断が必要な時に、ユーザーへ質問する前の実行/修正/拒否/巻き戻し等を判断。`reject` は停止条件として扱う。\n- `context_decision_feedback`: `context_decision` 後の作業結果を Good/Bad または system/AI outcome として保存。\n- `register_candidates`: 複数 candidate の一括登録。\n- `compile_eval`: `No Content` 以外の `context_compile` の作業後評価を保存。\n- `search_memory` / `fetch_memory`: 過去会話・差分の参照（補助）。\n- `doctor`: DB / embedding / automation / run health の診断。"
+                }
+              ],
+              "structured_content": null
+            },
+            "error": null,
+            "status": "completed"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.completed: context-still.initial_instructions",
+      "status": "completed"
+    },
+    {
+      "id": "c9cdda39-ce0d-4c21-b6cb-d7f788fac97f",
+      "seq": 9,
+      "createdAt": "2026-06-28T06:10:44.297Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "context_compile",
+        "arguments": {
+          "goal": "提供された EvaluationPromptContext だけを主材料として、project-value-evaluator の現在価値を多角的に独立評価し、指定スキーマの JSON レポートを返す。ファイル変更や追加検証は行わない。",
+          "changeTypes": [
+            "review"
+          ],
+          "technologies": [
+            "typescript",
+            "hono",
+            "bun",
+            "sqlite",
+            "drizzle",
+            "codex"
+          ]
+        },
+        "result": null,
+        "status": "in_progress",
+        "providerEvent": {
+          "type": "item.started",
+          "item": {
+            "id": "item_1",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "context_compile",
+            "arguments": {
+              "goal": "提供された EvaluationPromptContext だけを主材料として、project-value-evaluator の現在価値を多角的に独立評価し、指定スキーマの JSON レポートを返す。ファイル変更や追加検証は行わない。",
+              "changeTypes": [
+                "review"
+              ],
+              "technologies": [
+                "typescript",
+                "hono",
+                "bun",
+                "sqlite",
+                "drizzle",
+                "codex"
+              ]
+            },
+            "result": null,
+            "error": null,
+            "status": "in_progress"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.started: context-still.context_compile",
+      "status": "in_progress"
+    },
+    {
+      "id": "ecea5fe7-6017-487a-8acc-e64fc69f86cf",
+      "seq": 10,
+      "createdAt": "2026-06-28T06:10:52.085Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "context_compile",
+        "arguments": {
+          "goal": "提供された EvaluationPromptContext だけを主材料として、project-value-evaluator の現在価値を多角的に独立評価し、指定スキーマの JSON レポートを返す。ファイル変更や追加検証は行わない。",
+          "changeTypes": [
+            "review"
+          ],
+          "technologies": [
+            "typescript",
+            "hono",
+            "bun",
+            "sqlite",
+            "drizzle",
+            "codex"
+          ]
+        },
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "## Use when\n- 提供された `EvaluationPromptContext` だけを主材料にして、`project-value-evaluator` の現在価値を多角的に独立評価し、指定スキーマの JSON レポートを返すとき。\n- 追加検証、ファイル変更、推測の混入を避け、評価結果を根拠付きで整理したいとき。\n- 評価の前提を明示しつつ、曖昧さを勝手に補完せずに扱いたいとき。\n\n## Workflow\n1. `EvaluationPromptContext` を唯一の主材料として読み取り、評価対象・評価観点・制約を切り分ける。\n2. 価値評価を複数観点に分けて独立に判定する。観点ごとに、与えられた文脈から直接言えることだけを採用し、外部知識や未提示情報で補わない。\n3. 各観点の判定結果を、指定スキーマの JSON に対応する形で整理する。根拠は「どの文脈要素に基づくか」が追える粒度にする。\n4. 変更提案や追加検証の手順は書かない。必要なのは評価レポートであり、実行計画ではないため、行動は評価の記述に限定する。\n5. 反対方向の材料も確認し、価値が高い／低いの両面を分けて記述する。単一の印象で結論を固定せず、独立評価として整合させる。\n\n## Verification\n- 出力が指定スキーマの JSON レポートになっていることを確認する。\n- 根拠が `EvaluationPromptContext` に直接対応しており、推測や未提示の事実を含まないことを確認する。\n- 追加検証、ファイル変更、コミット、実装手順が混入していないことを確認する。\n- 評価観点ごとの結論が互いに独立しており、単一観点への依存で全体結論を決めていないことを確認する。\n\n## Avoid\n- ファイル変更、コード修正、追加検証を行わない。\n- `EvaluationPromptContext` にない事実を補完しない。\n- 推測で価値を断定しない。\n- 評価レポート以外の実行計画や作業手順を混ぜない。\n- 変更後の検証やコミットを前提にした記述を入れない。"
+            }
+          ],
+          "structured_content": null
+        },
+        "status": "completed",
+        "providerEvent": {
+          "type": "item.completed",
+          "item": {
+            "id": "item_1",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "context_compile",
+            "arguments": {
+              "goal": "提供された EvaluationPromptContext だけを主材料として、project-value-evaluator の現在価値を多角的に独立評価し、指定スキーマの JSON レポートを返す。ファイル変更や追加検証は行わない。",
+              "changeTypes": [
+                "review"
+              ],
+              "technologies": [
+                "typescript",
+                "hono",
+                "bun",
+                "sqlite",
+                "drizzle",
+                "codex"
+              ]
+            },
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "## Use when\n- 提供された `EvaluationPromptContext` だけを主材料にして、`project-value-evaluator` の現在価値を多角的に独立評価し、指定スキーマの JSON レポートを返すとき。\n- 追加検証、ファイル変更、推測の混入を避け、評価結果を根拠付きで整理したいとき。\n- 評価の前提を明示しつつ、曖昧さを勝手に補完せずに扱いたいとき。\n\n## Workflow\n1. `EvaluationPromptContext` を唯一の主材料として読み取り、評価対象・評価観点・制約を切り分ける。\n2. 価値評価を複数観点に分けて独立に判定する。観点ごとに、与えられた文脈から直接言えることだけを採用し、外部知識や未提示情報で補わない。\n3. 各観点の判定結果を、指定スキーマの JSON に対応する形で整理する。根拠は「どの文脈要素に基づくか」が追える粒度にする。\n4. 変更提案や追加検証の手順は書かない。必要なのは評価レポートであり、実行計画ではないため、行動は評価の記述に限定する。\n5. 反対方向の材料も確認し、価値が高い／低いの両面を分けて記述する。単一の印象で結論を固定せず、独立評価として整合させる。\n\n## Verification\n- 出力が指定スキーマの JSON レポートになっていることを確認する。\n- 根拠が `EvaluationPromptContext` に直接対応しており、推測や未提示の事実を含まないことを確認する。\n- 追加検証、ファイル変更、コミット、実装手順が混入していないことを確認する。\n- 評価観点ごとの結論が互いに独立しており、単一観点への依存で全体結論を決めていないことを確認する。\n\n## Avoid\n- ファイル変更、コード修正、追加検証を行わない。\n- `EvaluationPromptContext` にない事実を補完しない。\n- 推測で価値を断定しない。\n- 評価レポート以外の実行計画や作業手順を混ぜない。\n- 変更後の検証やコミットを前提にした記述を入れない。"
+                }
+              ],
+              "structured_content": null
+            },
+            "error": null,
+            "status": "completed"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.completed: context-still.context_compile",
+      "status": "completed"
+    },
+    {
+      "id": "68381e3e-5d3f-4c0c-9100-ccfbc3065119",
+      "seq": 11,
+      "createdAt": "2026-06-28T06:11:03.186Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "compile_eval",
+        "arguments": {
+          "runId": "",
+          "outcome": "useful",
+          "actionability": 94,
+          "clarity": 94,
+          "coverage": 90,
+          "relevance": 98,
+          "specificity": 93,
+          "title": "評価コンテキスト制約の確認",
+          "body": "提供された EvaluationPromptContext を主材料にし、追加検証やファイル変更を行わず、指定スキーマ JSON の評価レポートに限定する方針が明確になった。"
+        },
+        "result": null,
+        "status": "in_progress",
+        "providerEvent": {
+          "type": "item.started",
+          "item": {
+            "id": "item_2",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "compile_eval",
+            "arguments": {
+              "runId": "",
+              "outcome": "useful",
+              "actionability": 94,
+              "clarity": 94,
+              "coverage": 90,
+              "relevance": 98,
+              "specificity": 93,
+              "title": "評価コンテキスト制約の確認",
+              "body": "提供された EvaluationPromptContext を主材料にし、追加検証やファイル変更を行わず、指定スキーマ JSON の評価レポートに限定する方針が明確になった。"
+            },
+            "result": null,
+            "error": null,
+            "status": "in_progress"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.started: context-still.compile_eval",
+      "status": "in_progress"
+    },
+    {
+      "id": "9d6835f9-714e-4996-a02d-3e2d84c5ab88",
+      "seq": 12,
+      "createdAt": "2026-06-28T06:11:03.228Z",
+      "phase": "judge",
+      "level": "info",
+      "source": "codex",
+      "payload": {
+        "itemType": "mcp_tool_call",
+        "server": "context-still",
+        "tool": "compile_eval",
+        "arguments": {
+          "runId": "",
+          "outcome": "useful",
+          "actionability": 94,
+          "clarity": 94,
+          "coverage": 90,
+          "relevance": 98,
+          "specificity": 93,
+          "title": "評価コンテキスト制約の確認",
+          "body": "提供された EvaluationPromptContext を主材料にし、追加検証やファイル変更を行わず、指定スキーマ JSON の評価レポートに限定する方針が明確になった。"
+        },
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\n  \"evaluation\": {\n    \"actionability\": 94,\n    \"avg\": 93,\n    \"body\": \"提供された EvaluationPromptContext を主材料にし、追加検証やファイル変更を行わず、指定スキーマ JSON の評価レポートに限定する方針が明確になった。\",\n    \"clarity\": 94,\n    \"coverage\": 90,\n    \"createdAt\": \"unix-ms:1782627063224\",\n    \"id\": \"00000000-0000-0000-18bd-29de867a1790\",\n    \"outcome\": \"useful\",\n    \"relevance\": 98,\n    \"runId\": \"00000000-0000-0000-18bd-29da235e3afc\",\n    \"sessionId\": \"019f0cd9-c828-7540-aeff-2f1d7053033f\",\n    \"source\": \"mcp\",\n    \"specificity\": 93,\n    \"title\": \"評価コンテキスト制約の確認\",\n    \"updatedAt\": \"unix-ms:1782627063224\"\n  },\n  \"resolvedFrom\": \"latest_session_run\"\n}"
+            }
+          ],
+          "structured_content": null
+        },
+        "status": "completed",
+        "providerEvent": {
+          "type": "item.completed",
+          "item": {
+            "id": "item_2",
+            "type": "mcp_tool_call",
+            "server": "context-still",
+            "tool": "compile_eval",
+            "arguments": {
+              "runId": "",
+              "outcome": "useful",
+              "actionability": 94,
+              "clarity": 94,
+              "coverage": 90,
+              "relevance": 98,
+              "specificity": 93,
+              "title": "評価コンテキスト制約の確認",
+              "body": "提供された EvaluationPromptContext を主材料にし、追加検証やファイル変更を行わず、指定スキーマ JSON の評価レポートに限定する方針が明確になった。"
+            },
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "{\n  \"evaluation\": {\n    \"actionability\": 94,\n    \"avg\": 93,\n    \"body\": \"提供された EvaluationPromptContext を主材料にし、追加検証やファイル変更を行わず、指定スキーマ JSON の評価レポートに限定する方針が明確になった。\",\n    \"clarity\": 94,\n    \"coverage\": 90,\n    \"createdAt\": \"unix-ms:1782627063224\",\n    \"id\": \"00000000-0000-0000-18bd-29de867a1790\",\n    \"outcome\": \"useful\",\n    \"relevance\": 98,\n    \"runId\": \"00000000-0000-0000-18bd-29da235e3afc\",\n    \"sessionId\": \"019f0cd9-c828-7540-aeff-2f1d7053033f\",\n    \"source\": \"mcp\",\n    \"specificity\": 93,\n    \"title\": \"評価コンテキスト制約の確認\",\n    \"updatedAt\": \"unix-ms:1782627063224\"\n  },\n  \"resolvedFrom\": \"latest_session_run\"\n}"
+                }
+              ],
+              "structured_content": null
+            },
+            "error": null,
+            "status": "completed"
+          }
+        }
+      },
+      "message": "Codex MCP tool item.completed: context-still.compile_eval",
+      "status": "completed"
+    },
+    {
+      "id": "2b977a6b-17b0-4529-8ab1-12ab1d1a1fc3",
+      "seq": 13,
+      "createdAt": "2026-06-28T06:12:11.625Z",
+      "phase": "judge",
+      "level": "checkpoint",
+      "source": "codex",
+      "payload": {
+        "itemType": "agent_message",
+        "text": "{\"schemaVersion\":\"project-evaluation-report/v1\",\"baselinePrompt\":\"このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください\",\"judge\":{\"provider\":\"codex\",\"model\":\"gpt-5.5\",\"mode\":\"review-only\"},\"overallScore\":83,\"confidence\":0.78,\"summary\":\"ProjectValueEvaluator は、coding agents 向けにプロジェクト価値評価を固定スキーマ、履歴、前回差分、改善案へ落とし込むという用途が明確で、baselinePrompt との整合も高いです。CLI/API/共有 schema/SQLite 永続化/テスト配置まで揃っており、MVP としての実用性は十分あります。一方で、提供コンテキスト上は移行途中であり、実際の verify 実行、provider adapter の実働境界、rootPath 安全性、UI/API/CLI の実行証跡は未確認です。\",\"dimensions\":[{\"key\":\"conceptValue\",\"label\":\"conceptValue\",\"score\":89,\"confidence\":0.84,\"rationale\":\"普段の曖昧な価値評価依頼を、再利用可能な評価 context、rubric、schema、履歴、改善案に変換する設計は対象ユーザーである coding agents に直接価値があります。\",\"evidence\":[\"baseline prompt が README と LLM_CONTEXT で明示されている\",\"ProjectProfile から EvaluationPromptContext、report、delta、improvementIdeas、saved history へ進む流れが定義されている\",\"primaryAudience と targetWorkflow が coding agents の評価・改善生成に一致している\"],\"concerns\":[\"価値評価そのものの品質は judge 出力に大きく依存する\",\"OSS としての差別化は、実例や比較可能な出力がないと伝わりにくい\"]},{\"key\":\"implementationCompleteness\",\"label\":\"implementationCompleteness\",\"score\":82,\"confidence\":0.76,\"rationale\":\"CLI、API route、DB migration、repository/service、judge client、frontend view、テストが揃っており MVP の骨格は実装済みに見えます。ただし README が移行途中と明記しており、未実装 provider は adapter-not-implemented 扱いです。\",\"evidence\":[\"api/cli/evaluate.ts と reevaluate.ts が存在する\",\"projects/evaluations route と service/repository がある\",\"drizzle migration が 0006 まで存在する\",\"evaluation.service.test.ts や route test が配置されている\"],\"concerns\":[\"提供コンテキストだけでは CLI/API/UI の実働成功は確認できない\",\"OpenAI、Azure、Local LLM adapter は拡張点として残るが実装完了ではない\"]},{\"key\":\"architectureQuality\",\"label\":\"architectureQuality\",\"score\":84,\"confidence\":0.79,\"rationale\":\"ProjectProfile、EvaluationPromptContext、JudgeProviderAdapter、ProjectEvaluationReport、EvaluationDelta を分け、CLI と API が同じ EvaluationService を使う方針は妥当です。schema を shared に寄せる構造も良いです。\",\"evidence\":[\"api/modules/projects、api/modules/evaluations、api/modules/llm に責務が分離されている\",\"shared/schemas に project/evaluation/improvement schema が配置されている\",\"LLM_CONTEXT が CLI と API の同一 usecase 利用を契約として明記している\"],\"concerns\":[\"bundle-builder が移行対象として残っており責務境界がまだ揺れている\",\"frontend、auth、evaluation の境界がテンプレート由来要素と混在している可能性がある\"]},{\"key\":\"maintainability\",\"label\":\"maintainability\",\"score\":82,\"confidence\":0.77,\"rationale\":\"TypeScript、Zod、Drizzle、Hono route、Vitest、Biome による保守基盤は整っています。LLM_CONTEXT と README の契約も保守に効きますが、移行途中の設計文書依存が残っています。\",\"evidence\":[\"typecheck、lint、format:check、test、build、verify scripts が定義されている\",\"README が主要 path と役割を表にしている\",\"spec に実装計画が置かれている\"],\"concerns\":[\"source truth が spec と README に分散している\",\"移行途中の module 名や責務が将来の変更時に混乱を生む可能性がある\"]},{\"key\":\"security\",\"label\":\"security\",\"score\":74,\"confidence\":0.67,\"rationale\":\"rootPath を扱う評価サービスであり、provider credentials とローカルファイル参照境界が重要ですが、提供コンテキストでは安全性の実装証跡が限定的です。Auth は残っていますが MVP 中心ではないとされます。\",\"evidence\":[\"auth middleware と auth module のテストが存在する\",\"jose 依存と auth route がある\",\".env.example と provider 設定が想定されている\"],\"concerns\":[\"評価対象 rootPath のアクセス制限や path traversal 対策は未確認\",\"Codex/OpenAI/Azure/Local LLM の credential 取り扱いは実装詳細未確認\",\"baseline 評価で source inspection を自動実行しない方針は安全寄りだが、将来の evidence collector 境界が重要\"]},{\"key\":\"testability\",\"label\":\"testability\",\"score\":86,\"confidence\":0.8,\"rationale\":\"module、route、auth、judge-client にテストが配置され、変更種別ごとの verification matrix もあります。評価ロジックの中心に targeted Vitest が指定されている点は強いです。\",\"evidence\":[\"evaluation.service.test.ts、judge-client.test.ts、projects.route.test.ts、evaluations.route.test.ts が存在する\",\"bun run verify が full verification pipeline として定義されている\",\"LLM_CONTEXT に変更種別別の最小検証が明記されている\"],\"concerns\":[\"今回のレビューでは実際にテストを実行していない\",\"LLM provider 実通信や Codex SDK 周辺の統合テスト有無は未確認\"]},{\"key\":\"documentation\",\"label\":\"documentation\",\"score\":83,\"confidence\":0.82,\"rationale\":\"README と LLM_CONTEXT が目的、MVP flow、API、CLI、Evidence Policy、検証コマンドを明確に説明しています。agent が読む文脈としては十分整理されています。\",\"evidence\":[\"README に MVP、構成、セットアップ、CLI、API、検証、non-goals がある\",\"LLM_CONTEXT に repository snapshot、contracts、verification matrix がある\",\"spec/codex-first-multi-agent-evaluation-implementation-plan.md が参照されている\"],\"concerns\":[\"実行例の保存済み JSON やスクリーンショットが提供コンテキストには少ない\",\"移行途中であることが、初見利用者には完成度判断を難しくする\"]},{\"key\":\"agentUsability\",\"label\":\"agentUsability\",\"score\":88,\"confidence\":0.84,\"rationale\":\"coding agents が迷わず評価できるように、baseline prompt、context schema、commands、verification matrix、non-goals が明文化されています。JSON schema 化と CLI は agent workflow に特に合っています。\",\"evidence\":[\"baselinePrompt が固定されている\",\"EvaluationPromptContext と ProjectEvaluationReport の契約が明示されている\",\"CLI の --json と profile JSON 指定が説明されている\"],\"concerns\":[\"agent が実行結果を比較するためのサンプル artifact が少ない\",\"未確認事項を notVerified に残す方針は良いが、collector との接続はまだ今後の課題\"]},{\"key\":\"extensibility\",\"label\":\"extensibility\",\"score\":82,\"confidence\":0.77,\"rationale\":\"provider adapter、dimension schema、profile JSON、text JSON 永続化により拡張余地はあります。MVP non-goals も適切に切られていますが、未実装 adapter が多い段階です。\",\"evidence\":[\"Codex を主 judge にしつつ OpenAI、Azure OpenAI、Local LLM の provider 抽象を残している\",\"ProjectProfile で dimensions と nonGoals を扱う設計がある\",\"DB では JSON 配列を text JSON として保存してよい方針がある\"],\"concerns\":[\"複数 provider voting や audit-grade collector は non-goal のため未提供\",\"adapter-not-implemented の UX と将来実装のテスト契約は未確認\"]},{\"key\":\"reliability\",\"label\":\"reliability\",\"score\":80,\"confidence\":0.73,\"rationale\":\"保存履歴、delta 計算、repository 層、migration、verify script により信頼性の基礎はあります。ただし judge 実行は外部 SDK/provider に依存し、今回の入力だけでは失敗時挙動や再試行の堅牢性は判断できません。\",\"evidence\":[\"Saved history と EvaluationDelta が MVP flow に含まれる\",\"evaluation.repository.ts と Drizzle migrations がある\",\"未実装 provider を暗黙 fallback しない契約がある\"],\"concerns\":[\"Codex SDK 失敗時、JSON parse 失敗時、DB 書き込み失敗時の実挙動は未確認\",\"verify 実行結果が提供されていない\"]},{\"key\":\"strategicFit\",\"label\":\"strategicFit\",\"score\":90,\"confidence\":0.85,\"rationale\":\"baselinePrompt を中心に、評価、比較、改善案生成を固定化する目的と実装構成が強く一致しています。対象ユーザーを coding agents に絞っている点も戦略的に明確です。\",\"evidence\":[\"projectIdeal が価値提供、実装、検証、文書、agent usability を明示している\",\"targetWorkflow が evaluate project value and generate next improvements と定義されている\",\"README と LLM_CONTEXT が同じ中核 flow を繰り返し説明している\"],\"concerns\":[\"人間向け SaaS ではなく agent-first に寄せているため、市場範囲は狭い\",\"評価品質を高める evidence collector がまだ後続扱い\"]},{\"key\":\"ossProductValue\",\"label\":\"ossProductValue\",\"score\":77,\"confidence\":0.72,\"rationale\":\"MIT、README、CLI/API、明確な niche により OSS として公開価値はあります。ただし、初見利用者がすぐ価値を体験できるサンプル出力、実行デモ、provider 設定の実働証跡は不足気味です。\",\"evidence\":[\"license が MIT\",\"package keywords に project-evaluation と coding-agents がある\",\"README に setup と CLI/API がある\"],\"concerns\":[\"公開利用者向けの quickstart 成功例が薄い\",\"Codex SDK 依存と provider 設定が導入障壁になる可能性がある\"]}],\"strengths\":[\"baseline prompt を中心に評価依頼を構造化し、履歴と改善案まで保存する価値が明確です。\",\"CLI、API、shared schema、DB migration、frontend、テストが揃い、MVP の実装面はかなり具体化されています。\",\"Evidence Policy により、LLM 評価と audit-grade evidence を混同しない設計判断ができています。\",\"LLM_CONTEXT と README が agent 向けの実行契約、検証方針、non-goals を明確にしています。\",\"未実装 provider を暗黙 fallback しない方針は、評価結果の信頼性に効きます。\"],\"weaknesses\":[\"実際の verify、CLI 実行、API 実行、UI 操作の証跡が今回の bundle には含まれていません。\",\"provider adapter 境界は設計されていますが、Codex 以外の実装価値はまだ限定的です。\",\"rootPath と provider credential 周辺の安全性は、提供コンテキストだけでは十分に確認できません。\",\"bundle-builder が移行対象として残っており、責務境界の整理が未完了に見えます。\",\"OSS 初見利用者向けのサンプル出力と成功パスがまだ弱いです。\"],\"improvementIdeas\":[{\"title\":\"評価 artifact の実行サンプルを固定する\",\"reason\":\"CLI/API/UI が同じ評価 usecase を呼ぶことを、保存済み JSON とコマンド出力で確認できるようにすると、agent と人間の双方が価値を判断しやすくなります。\",\"expectedScoreImpact\":4,\"affectedDimensions\":[\"documentation\",\"agentUsability\",\"reliability\",\"ossProductValue\"],\"suggestedPrompt\":\"CLI の --json 出力、reevaluate の delta 出力、API response の代表例を spec/baselines に保存し、README から参照できるようにしてください。\",\"acceptanceCriteria\":[\"evaluator:evaluate --json の代表出力が保存されている\",\"reevaluate の delta を含む代表出力が保存されている\",\"README からサンプル artifact へ辿れる\"]},{\"title\":\"rootPath と credential 境界の安全性を明文化する\",\"reason\":\"評価対象 repo path と provider credential を扱うため、アクセス境界と秘密情報の扱いを明確にすると security と信頼性が上がります。\",\"expectedScoreImpact\":5,\"affectedDimensions\":[\"security\",\"reliability\",\"documentation\"],\"suggestedPrompt\":\"ProjectProfile の rootPath validation、許可 root、秘密情報の保存禁止、provider env の扱いを実装または仕様化し、テストで確認してください。\",\"acceptanceCriteria\":[\"rootPath validation の仕様またはテストがある\",\"path traversal や存在しない path の扱いが明示されている\",\"provider secret を report や raw output に含めない方針が確認できる\"]},{\"title\":\"bundle-builder の責務を分離する\",\"reason\":\"移行対象が残ると、baseline 評価と将来の evidence collector の境界が曖昧になりやすいです。\",\"expectedScoreImpact\":3,\"affectedDimensions\":[\"architectureQuality\",\"maintainability\",\"extensibility\"],\"suggestedPrompt\":\"bundle-builder を EvaluationPromptContext builder と evidence collector 準備領域に分け、baseline 評価では自動 verify や source inspection を行わない契約をコード構造にも反映してください。\",\"acceptanceCriteria\":[\"baseline context builder の責務が名前と API で明確になっている\",\"evidence collector 予定の責務が baseline path と混ざっていない\",\"既存の評価 service test が通る前提の設計になっている\"]},{\"title\":\"provider adapter の実働境界をテストで固定する\",\"reason\":\"Codex-first 方針は明確ですが、未実装 provider の失敗表現と fallback 禁止が壊れると評価結果の信頼性が落ちます。\",\"expectedScoreImpact\":4,\"affectedDimensions\":[\"reliability\",\"testability\",\"agentUsability\",\"extensibility\"],\"suggestedPrompt\":\"Codex adapter、未実装 provider、JSON schema 不一致、provider error の代表ケースを judge-client test に追加し、暗黙 fallback が起きないことを保証してください。\",\"acceptanceCriteria\":[\"adapter-not-implemented のテストがある\",\"provider error が report または明示エラーとして扱われる\",\"暗黙 fallback が発生しないことを検証している\"]},{\"title\":\"README の quickstart を成功体験中心に補強する\",\"reason\":\"OSS として使う人が最短で価値を確認できる導線があると、導入障壁が下がります。\",\"expectedScoreImpact\":3,\"affectedDimensions\":[\"documentation\",\"ossProductValue\",\"agentUsability\"],\"suggestedPrompt\":\"セットアップ後に一つのサンプル repo を評価し、出力 JSON、保存履歴、再評価 delta まで確認する quickstart を README に追加してください。\",\"acceptanceCriteria\":[\"初回セットアップから評価実行までの手順が一続きで書かれている\",\"期待される出力の要点が示されている\",\"失敗しやすい provider 設定の注意点がある\"]}],\"notVerified\":[\"ファイル内容の追加 inspection は行っていません。\",\"bun run verify、typecheck、lint、test、build は実行していません。\",\"CLI、API、UI の実働は確認していません。\",\"SQLite migration の適用可否は確認していません。\",\"Codex SDK と provider adapter の実通信は確認していません。\",\"rootPath validation と credential redaction の実装詳細は確認していません。\"]}",
+        "providerEvent": {
+          "type": "item.completed",
+          "item": {
+            "id": "item_3",
+            "type": "agent_message",
+            "text": "{\"schemaVersion\":\"project-evaluation-report/v1\",\"baselinePrompt\":\"このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください\",\"judge\":{\"provider\":\"codex\",\"model\":\"gpt-5.5\",\"mode\":\"review-only\"},\"overallScore\":83,\"confidence\":0.78,\"summary\":\"ProjectValueEvaluator は、coding agents 向けにプロジェクト価値評価を固定スキーマ、履歴、前回差分、改善案へ落とし込むという用途が明確で、baselinePrompt との整合も高いです。CLI/API/共有 schema/SQLite 永続化/テスト配置まで揃っており、MVP としての実用性は十分あります。一方で、提供コンテキスト上は移行途中であり、実際の verify 実行、provider adapter の実働境界、rootPath 安全性、UI/API/CLI の実行証跡は未確認です。\",\"dimensions\":[{\"key\":\"conceptValue\",\"label\":\"conceptValue\",\"score\":89,\"confidence\":0.84,\"rationale\":\"普段の曖昧な価値評価依頼を、再利用可能な評価 context、rubric、schema、履歴、改善案に変換する設計は対象ユーザーである coding agents に直接価値があります。\",\"evidence\":[\"baseline prompt が README と LLM_CONTEXT で明示されている\",\"ProjectProfile から EvaluationPromptContext、report、delta、improvementIdeas、saved history へ進む流れが定義されている\",\"primaryAudience と targetWorkflow が coding agents の評価・改善生成に一致している\"],\"concerns\":[\"価値評価そのものの品質は judge 出力に大きく依存する\",\"OSS としての差別化は、実例や比較可能な出力がないと伝わりにくい\"]},{\"key\":\"implementationCompleteness\",\"label\":\"implementationCompleteness\",\"score\":82,\"confidence\":0.76,\"rationale\":\"CLI、API route、DB migration、repository/service、judge client、frontend view、テストが揃っており MVP の骨格は実装済みに見えます。ただし README が移行途中と明記しており、未実装 provider は adapter-not-implemented 扱いです。\",\"evidence\":[\"api/cli/evaluate.ts と reevaluate.ts が存在する\",\"projects/evaluations route と service/repository がある\",\"drizzle migration が 0006 まで存在する\",\"evaluation.service.test.ts や route test が配置されている\"],\"concerns\":[\"提供コンテキストだけでは CLI/API/UI の実働成功は確認できない\",\"OpenAI、Azure、Local LLM adapter は拡張点として残るが実装完了ではない\"]},{\"key\":\"architectureQuality\",\"label\":\"architectureQuality\",\"score\":84,\"confidence\":0.79,\"rationale\":\"ProjectProfile、EvaluationPromptContext、JudgeProviderAdapter、ProjectEvaluationReport、EvaluationDelta を分け、CLI と API が同じ EvaluationService を使う方針は妥当です。schema を shared に寄せる構造も良いです。\",\"evidence\":[\"api/modules/projects、api/modules/evaluations、api/modules/llm に責務が分離されている\",\"shared/schemas に project/evaluation/improvement schema が配置されている\",\"LLM_CONTEXT が CLI と API の同一 usecase 利用を契約として明記している\"],\"concerns\":[\"bundle-builder が移行対象として残っており責務境界がまだ揺れている\",\"frontend、auth、evaluation の境界がテンプレート由来要素と混在している可能性がある\"]},{\"key\":\"maintainability\",\"label\":\"maintainability\",\"score\":82,\"confidence\":0.77,\"rationale\":\"TypeScript、Zod、Drizzle、Hono route、Vitest、Biome による保守基盤は整っています。LLM_CONTEXT と README の契約も保守に効きますが、移行途中の設計文書依存が残っています。\",\"evidence\":[\"typecheck、lint、format:check、test、build、verify scripts が定義されている\",\"README が主要 path と役割を表にしている\",\"spec に実装計画が置かれている\"],\"concerns\":[\"source truth が spec と README に分散している\",\"移行途中の module 名や責務が将来の変更時に混乱を生む可能性がある\"]},{\"key\":\"security\",\"label\":\"security\",\"score\":74,\"confidence\":0.67,\"rationale\":\"rootPath を扱う評価サービスであり、provider credentials とローカルファイル参照境界が重要ですが、提供コンテキストでは安全性の実装証跡が限定的です。Auth は残っていますが MVP 中心ではないとされます。\",\"evidence\":[\"auth middleware と auth module のテストが存在する\",\"jose 依存と auth route がある\",\".env.example と provider 設定が想定されている\"],\"concerns\":[\"評価対象 rootPath のアクセス制限や path traversal 対策は未確認\",\"Codex/OpenAI/Azure/Local LLM の credential 取り扱いは実装詳細未確認\",\"baseline 評価で source inspection を自動実行しない方針は安全寄りだが、将来の evidence collector 境界が重要\"]},{\"key\":\"testability\",\"label\":\"testability\",\"score\":86,\"confidence\":0.8,\"rationale\":\"module、route、auth、judge-client にテストが配置され、変更種別ごとの verification matrix もあります。評価ロジックの中心に targeted Vitest が指定されている点は強いです。\",\"evidence\":[\"evaluation.service.test.ts、judge-client.test.ts、projects.route.test.ts、evaluations.route.test.ts が存在する\",\"bun run verify が full verification pipeline として定義されている\",\"LLM_CONTEXT に変更種別別の最小検証が明記されている\"],\"concerns\":[\"今回のレビューでは実際にテストを実行していない\",\"LLM provider 実通信や Codex SDK 周辺の統合テスト有無は未確認\"]},{\"key\":\"documentation\",\"label\":\"documentation\",\"score\":83,\"confidence\":0.82,\"rationale\":\"README と LLM_CONTEXT が目的、MVP flow、API、CLI、Evidence Policy、検証コマンドを明確に説明しています。agent が読む文脈としては十分整理されています。\",\"evidence\":[\"README に MVP、構成、セットアップ、CLI、API、検証、non-goals がある\",\"LLM_CONTEXT に repository snapshot、contracts、verification matrix がある\",\"spec/codex-first-multi-agent-evaluation-implementation-plan.md が参照されている\"],\"concerns\":[\"実行例の保存済み JSON やスクリーンショットが提供コンテキストには少ない\",\"移行途中であることが、初見利用者には完成度判断を難しくする\"]},{\"key\":\"agentUsability\",\"label\":\"agentUsability\",\"score\":88,\"confidence\":0.84,\"rationale\":\"coding agents が迷わず評価できるように、baseline prompt、context schema、commands、verification matrix、non-goals が明文化されています。JSON schema 化と CLI は agent workflow に特に合っています。\",\"evidence\":[\"baselinePrompt が固定されている\",\"EvaluationPromptContext と ProjectEvaluationReport の契約が明示されている\",\"CLI の --json と profile JSON 指定が説明されている\"],\"concerns\":[\"agent が実行結果を比較するためのサンプル artifact が少ない\",\"未確認事項を notVerified に残す方針は良いが、collector との接続はまだ今後の課題\"]},{\"key\":\"extensibility\",\"label\":\"extensibility\",\"score\":82,\"confidence\":0.77,\"rationale\":\"provider adapter、dimension schema、profile JSON、text JSON 永続化により拡張余地はあります。MVP non-goals も適切に切られていますが、未実装 adapter が多い段階です。\",\"evidence\":[\"Codex を主 judge にしつつ OpenAI、Azure OpenAI、Local LLM の provider 抽象を残している\",\"ProjectProfile で dimensions と nonGoals を扱う設計がある\",\"DB では JSON 配列を text JSON として保存してよい方針がある\"],\"concerns\":[\"複数 provider voting や audit-grade collector は non-goal のため未提供\",\"adapter-not-implemented の UX と将来実装のテスト契約は未確認\"]},{\"key\":\"reliability\",\"label\":\"reliability\",\"score\":80,\"confidence\":0.73,\"rationale\":\"保存履歴、delta 計算、repository 層、migration、verify script により信頼性の基礎はあります。ただし judge 実行は外部 SDK/provider に依存し、今回の入力だけでは失敗時挙動や再試行の堅牢性は判断できません。\",\"evidence\":[\"Saved history と EvaluationDelta が MVP flow に含まれる\",\"evaluation.repository.ts と Drizzle migrations がある\",\"未実装 provider を暗黙 fallback しない契約がある\"],\"concerns\":[\"Codex SDK 失敗時、JSON parse 失敗時、DB 書き込み失敗時の実挙動は未確認\",\"verify 実行結果が提供されていない\"]},{\"key\":\"strategicFit\",\"label\":\"strategicFit\",\"score\":90,\"confidence\":0.85,\"rationale\":\"baselinePrompt を中心に、評価、比較、改善案生成を固定化する目的と実装構成が強く一致しています。対象ユーザーを coding agents に絞っている点も戦略的に明確です。\",\"evidence\":[\"projectIdeal が価値提供、実装、検証、文書、agent usability を明示している\",\"targetWorkflow が evaluate project value and generate next improvements と定義されている\",\"README と LLM_CONTEXT が同じ中核 flow を繰り返し説明している\"],\"concerns\":[\"人間向け SaaS ではなく agent-first に寄せているため、市場範囲は狭い\",\"評価品質を高める evidence collector がまだ後続扱い\"]},{\"key\":\"ossProductValue\",\"label\":\"ossProductValue\",\"score\":77,\"confidence\":0.72,\"rationale\":\"MIT、README、CLI/API、明確な niche により OSS として公開価値はあります。ただし、初見利用者がすぐ価値を体験できるサンプル出力、実行デモ、provider 設定の実働証跡は不足気味です。\",\"evidence\":[\"license が MIT\",\"package keywords に project-evaluation と coding-agents がある\",\"README に setup と CLI/API がある\"],\"concerns\":[\"公開利用者向けの quickstart 成功例が薄い\",\"Codex SDK 依存と provider 設定が導入障壁になる可能性がある\"]}],\"strengths\":[\"baseline prompt を中心に評価依頼を構造化し、履歴と改善案まで保存する価値が明確です。\",\"CLI、API、shared schema、DB migration、frontend、テストが揃い、MVP の実装面はかなり具体化されています。\",\"Evidence Policy により、LLM 評価と audit-grade evidence を混同しない設計判断ができています。\",\"LLM_CONTEXT と README が agent 向けの実行契約、検証方針、non-goals を明確にしています。\",\"未実装 provider を暗黙 fallback しない方針は、評価結果の信頼性に効きます。\"],\"weaknesses\":[\"実際の verify、CLI 実行、API 実行、UI 操作の証跡が今回の bundle には含まれていません。\",\"provider adapter 境界は設計されていますが、Codex 以外の実装価値はまだ限定的です。\",\"rootPath と provider credential 周辺の安全性は、提供コンテキストだけでは十分に確認できません。\",\"bundle-builder が移行対象として残っており、責務境界の整理が未完了に見えます。\",\"OSS 初見利用者向けのサンプル出力と成功パスがまだ弱いです。\"],\"improvementIdeas\":[{\"title\":\"評価 artifact の実行サンプルを固定する\",\"reason\":\"CLI/API/UI が同じ評価 usecase を呼ぶことを、保存済み JSON とコマンド出力で確認できるようにすると、agent と人間の双方が価値を判断しやすくなります。\",\"expectedScoreImpact\":4,\"affectedDimensions\":[\"documentation\",\"agentUsability\",\"reliability\",\"ossProductValue\"],\"suggestedPrompt\":\"CLI の --json 出力、reevaluate の delta 出力、API response の代表例を spec/baselines に保存し、README から参照できるようにしてください。\",\"acceptanceCriteria\":[\"evaluator:evaluate --json の代表出力が保存されている\",\"reevaluate の delta を含む代表出力が保存されている\",\"README からサンプル artifact へ辿れる\"]},{\"title\":\"rootPath と credential 境界の安全性を明文化する\",\"reason\":\"評価対象 repo path と provider credential を扱うため、アクセス境界と秘密情報の扱いを明確にすると security と信頼性が上がります。\",\"expectedScoreImpact\":5,\"affectedDimensions\":[\"security\",\"reliability\",\"documentation\"],\"suggestedPrompt\":\"ProjectProfile の rootPath validation、許可 root、秘密情報の保存禁止、provider env の扱いを実装または仕様化し、テストで確認してください。\",\"acceptanceCriteria\":[\"rootPath validation の仕様またはテストがある\",\"path traversal や存在しない path の扱いが明示されている\",\"provider secret を report や raw output に含めない方針が確認できる\"]},{\"title\":\"bundle-builder の責務を分離する\",\"reason\":\"移行対象が残ると、baseline 評価と将来の evidence collector の境界が曖昧になりやすいです。\",\"expectedScoreImpact\":3,\"affectedDimensions\":[\"architectureQuality\",\"maintainability\",\"extensibility\"],\"suggestedPrompt\":\"bundle-builder を EvaluationPromptContext builder と evidence collector 準備領域に分け、baseline 評価では自動 verify や source inspection を行わない契約をコード構造にも反映してください。\",\"acceptanceCriteria\":[\"baseline context builder の責務が名前と API で明確になっている\",\"evidence collector 予定の責務が baseline path と混ざっていない\",\"既存の評価 service test が通る前提の設計になっている\"]},{\"title\":\"provider adapter の実働境界をテストで固定する\",\"reason\":\"Codex-first 方針は明確ですが、未実装 provider の失敗表現と fallback 禁止が壊れると評価結果の信頼性が落ちます。\",\"expectedScoreImpact\":4,\"affectedDimensions\":[\"reliability\",\"testability\",\"agentUsability\",\"extensibility\"],\"suggestedPrompt\":\"Codex adapter、未実装 provider、JSON schema 不一致、provider error の代表ケースを judge-client test に追加し、暗黙 fallback が起きないことを保証してください。\",\"acceptanceCriteria\":[\"adapter-not-implemented のテストがある\",\"provider error が report または明示エラーとして扱われる\",\"暗黙 fallback が発生しないことを検証している\"]},{\"title\":\"README の quickstart を成功体験中心に補強する\",\"reason\":\"OSS として使う人が最短で価値を確認できる導線があると、導入障壁が下がります。\",\"expectedScoreImpact\":3,\"affectedDimensions\":[\"documentation\",\"ossProductValue\",\"agentUsability\"],\"suggestedPrompt\":\"セットアップ後に一つのサンプル repo を評価し、出力 JSON、保存履歴、再評価 delta まで確認する quickstart を README に追加してください。\",\"acceptanceCriteria\":[\"初回セットアップから評価実行までの手順が一続きで書かれている\",\"期待される出力の要点が示されている\",\"失敗しやすい provider 設定の注意点がある\"]}],\"notVerified\":[\"ファイル内容の追加 inspection は行っていません。\",\"bun run verify、typecheck、lint、test、build は実行していません。\",\"CLI、API、UI の実働は確認していません。\",\"SQLite migration の適用可否は確認していません。\",\"Codex SDK と provider adapter の実通信は確認していません。\",\"rootPath validation と credential redaction の実装詳細は確認していません。\"]}"
+          }
+        }
+      },
+      "message": "Codex assistant response completed.",
+      "status": "item.completed"
+    },
+    {
+      "id": "11299bef-b909-4b8e-8242-7d6a413efeb6",
+      "seq": 14,
+      "createdAt": "2026-06-28T06:12:11.669Z",
+      "phase": "judge",
+      "level": "checkpoint",
+      "source": "codex",
+      "payload": {
+        "usage": {
+          "inputTokens": 128705,
+          "cachedInputTokens": 103936,
+          "outputTokens": 4692,
+          "reasoningOutputTokens": 670
+        },
+        "providerEvent": {
+          "type": "turn.completed",
+          "usage": {
+            "input_tokens": "[REDACTED]",
+            "cached_input_tokens": "[REDACTED]",
+            "output_tokens": "[REDACTED]",
+            "reasoning_output_tokens": "[REDACTED]"
+          }
+        }
+      },
+      "message": "Codex turn completed.",
+      "status": "completed"
+    },
+    {
+      "id": "4cf8be6f-436f-4ba7-81d6-adf81bacd939",
+      "seq": 15,
+      "createdAt": "2026-06-28T06:12:11.804Z",
+      "phase": "save",
+      "level": "info",
+      "source": "evaluator",
+      "message": "Saving evaluation and generated improvement requests."
+    },
+    {
+      "id": "7e163b18-96ff-46f2-8563-d5433a17fec6",
+      "seq": 16,
+      "createdAt": "2026-06-28T06:12:11.811Z",
+      "phase": "complete",
+      "level": "checkpoint",
+      "source": "evaluator",
+      "message": "Evaluation complete: 83 / 100.",
+      "payload": {
+        "evaluationId": "06a758f2-dff4-470e-bc54-4e2d57484165",
+        "score": 83,
+        "confidence": 0.78
+      }
+    }
+  ],
+  "judgeRun": {
+    "judge": "codex-agent",
+    "status": "completed",
+    "model": "gpt-5.5",
+    "mode": "review-only",
+    "threadId": "019f0cd9-c828-7540-aeff-2f1d7053033f",
+    "usage": {
+      "input_tokens": 128705,
+      "cached_input_tokens": 103936,
+      "output_tokens": 4692,
+      "reasoning_output_tokens": 670
+    }
+  },
+  "report": {
+    "schemaVersion": "project-evaluation-report/v1",
+    "baselinePrompt": "このプロジェクトの価値について評価をしてください、できるだけ多角的に評点してください",
+    "judge": {
+      "provider": "codex",
+      "model": "gpt-5.5",
+      "mode": "review-only"
+    },
+    "overallScore": 83,
+    "confidence": 0.78,
+    "summary": "ProjectValueEvaluator は、coding agents 向けにプロジェクト価値評価を固定スキーマ、履歴、前回差分、改善案へ落とし込むという用途が明確で、baselinePrompt との整合も高いです。CLI/API/共有 schema/SQLite 永続化/テスト配置まで揃っており、MVP としての実用性は十分あります。一方で、提供コンテキスト上は移行途中であり、実際の verify 実行、provider adapter の実働境界、rootPath 安全性、UI/API/CLI の実行証跡は未確認です。",
+    "dimensions": [
+      {
+        "key": "conceptValue",
+        "label": "conceptValue",
+        "score": 89,
+        "confidence": 0.84,
+        "rationale": "普段の曖昧な価値評価依頼を、再利用可能な評価 context、rubric、schema、履歴、改善案に変換する設計は対象ユーザーである coding agents に直接価値があります。",
+        "evidence": [
+          "baseline prompt が README と LLM_CONTEXT で明示されている",
+          "ProjectProfile から EvaluationPromptContext、report、delta、improvementIdeas、saved history へ進む流れが定義されている",
+          "primaryAudience と targetWorkflow が coding agents の評価・改善生成に一致している"
+        ],
+        "concerns": [
+          "価値評価そのものの品質は judge 出力に大きく依存する",
+          "OSS としての差別化は、実例や比較可能な出力がないと伝わりにくい"
+        ]
+      },
+      {
+        "key": "implementationCompleteness",
+        "label": "implementationCompleteness",
+        "score": 82,
+        "confidence": 0.76,
+        "rationale": "CLI、API route、DB migration、repository/service、judge client、frontend view、テストが揃っており MVP の骨格は実装済みに見えます。ただし README が移行途中と明記しており、未実装 provider は adapter-not-implemented 扱いです。",
+        "evidence": [
+          "api/cli/evaluate.ts と reevaluate.ts が存在する",
+          "projects/evaluations route と service/repository がある",
+          "drizzle migration が 0006 まで存在する",
+          "evaluation.service.test.ts や route test が配置されている"
+        ],
+        "concerns": [
+          "提供コンテキストだけでは CLI/API/UI の実働成功は確認できない",
+          "OpenAI、Azure、Local LLM adapter は拡張点として残るが実装完了ではない"
+        ]
+      },
+      {
+        "key": "architectureQuality",
+        "label": "architectureQuality",
+        "score": 84,
+        "confidence": 0.79,
+        "rationale": "ProjectProfile、EvaluationPromptContext、JudgeProviderAdapter、ProjectEvaluationReport、EvaluationDelta を分け、CLI と API が同じ EvaluationService を使う方針は妥当です。schema を shared に寄せる構造も良いです。",
+        "evidence": [
+          "api/modules/projects、api/modules/evaluations、api/modules/llm に責務が分離されている",
+          "shared/schemas に project/evaluation/improvement schema が配置されている",
+          "LLM_CONTEXT が CLI と API の同一 usecase 利用を契約として明記している"
+        ],
+        "concerns": [
+          "bundle-builder が移行対象として残っており責務境界がまだ揺れている",
+          "frontend、auth、evaluation の境界がテンプレート由来要素と混在している可能性がある"
+        ]
+      },
+      {
+        "key": "maintainability",
+        "label": "maintainability",
+        "score": 82,
+        "confidence": 0.77,
+        "rationale": "TypeScript、Zod、Drizzle、Hono route、Vitest、Biome による保守基盤は整っています。LLM_CONTEXT と README の契約も保守に効きますが、移行途中の設計文書依存が残っています。",
+        "evidence": [
+          "typecheck、lint、format:check、test、build、verify scripts が定義されている",
+          "README が主要 path と役割を表にしている",
+          "spec に実装計画が置かれている"
+        ],
+        "concerns": [
+          "source truth が spec と README に分散している",
+          "移行途中の module 名や責務が将来の変更時に混乱を生む可能性がある"
+        ]
+      },
+      {
+        "key": "security",
+        "label": "security",
+        "score": 74,
+        "confidence": 0.67,
+        "rationale": "rootPath を扱う評価サービスであり、provider credentials とローカルファイル参照境界が重要ですが、提供コンテキストでは安全性の実装証跡が限定的です。Auth は残っていますが MVP 中心ではないとされます。",
+        "evidence": [
+          "auth middleware と auth module のテストが存在する",
+          "jose 依存と auth route がある",
+          ".env.example と provider 設定が想定されている"
+        ],
+        "concerns": [
+          "評価対象 rootPath のアクセス制限や path traversal 対策は未確認",
+          "Codex/OpenAI/Azure/Local LLM の credential 取り扱いは実装詳細未確認",
+          "baseline 評価で source inspection を自動実行しない方針は安全寄りだが、将来の evidence collector 境界が重要"
+        ]
+      },
+      {
+        "key": "testability",
+        "label": "testability",
+        "score": 86,
+        "confidence": 0.8,
+        "rationale": "module、route、auth、judge-client にテストが配置され、変更種別ごとの verification matrix もあります。評価ロジックの中心に targeted Vitest が指定されている点は強いです。",
+        "evidence": [
+          "evaluation.service.test.ts、judge-client.test.ts、projects.route.test.ts、evaluations.route.test.ts が存在する",
+          "bun run verify が full verification pipeline として定義されている",
+          "LLM_CONTEXT に変更種別別の最小検証が明記されている"
+        ],
+        "concerns": [
+          "今回のレビューでは実際にテストを実行していない",
+          "LLM provider 実通信や Codex SDK 周辺の統合テスト有無は未確認"
+        ]
+      },
+      {
+        "key": "documentation",
+        "label": "documentation",
+        "score": 83,
+        "confidence": 0.82,
+        "rationale": "README と LLM_CONTEXT が目的、MVP flow、API、CLI、Evidence Policy、検証コマンドを明確に説明しています。agent が読む文脈としては十分整理されています。",
+        "evidence": [
+          "README に MVP、構成、セットアップ、CLI、API、検証、non-goals がある",
+          "LLM_CONTEXT に repository snapshot、contracts、verification matrix がある",
+          "spec/codex-first-multi-agent-evaluation-implementation-plan.md が参照されている"
+        ],
+        "concerns": [
+          "実行例の保存済み JSON やスクリーンショットが提供コンテキストには少ない",
+          "移行途中であることが、初見利用者には完成度判断を難しくする"
+        ]
+      },
+      {
+        "key": "agentUsability",
+        "label": "agentUsability",
+        "score": 88,
+        "confidence": 0.84,
+        "rationale": "coding agents が迷わず評価できるように、baseline prompt、context schema、commands、verification matrix、non-goals が明文化されています。JSON schema 化と CLI は agent workflow に特に合っています。",
+        "evidence": [
+          "baselinePrompt が固定されている",
+          "EvaluationPromptContext と ProjectEvaluationReport の契約が明示されている",
+          "CLI の --json と profile JSON 指定が説明されている"
+        ],
+        "concerns": [
+          "agent が実行結果を比較するためのサンプル artifact が少ない",
+          "未確認事項を notVerified に残す方針は良いが、collector との接続はまだ今後の課題"
+        ]
+      },
+      {
+        "key": "extensibility",
+        "label": "extensibility",
+        "score": 82,
+        "confidence": 0.77,
+        "rationale": "provider adapter、dimension schema、profile JSON、text JSON 永続化により拡張余地はあります。MVP non-goals も適切に切られていますが、未実装 adapter が多い段階です。",
+        "evidence": [
+          "Codex を主 judge にしつつ OpenAI、Azure OpenAI、Local LLM の provider 抽象を残している",
+          "ProjectProfile で dimensions と nonGoals を扱う設計がある",
+          "DB では JSON 配列を text JSON として保存してよい方針がある"
+        ],
+        "concerns": [
+          "複数 provider voting や audit-grade collector は non-goal のため未提供",
+          "adapter-not-implemented の UX と将来実装のテスト契約は未確認"
+        ]
+      },
+      {
+        "key": "reliability",
+        "label": "reliability",
+        "score": 80,
+        "confidence": 0.73,
+        "rationale": "保存履歴、delta 計算、repository 層、migration、verify script により信頼性の基礎はあります。ただし judge 実行は外部 SDK/provider に依存し、今回の入力だけでは失敗時挙動や再試行の堅牢性は判断できません。",
+        "evidence": [
+          "Saved history と EvaluationDelta が MVP flow に含まれる",
+          "evaluation.repository.ts と Drizzle migrations がある",
+          "未実装 provider を暗黙 fallback しない契約がある"
+        ],
+        "concerns": [
+          "Codex SDK 失敗時、JSON parse 失敗時、DB 書き込み失敗時の実挙動は未確認",
+          "verify 実行結果が提供されていない"
+        ]
+      },
+      {
+        "key": "strategicFit",
+        "label": "strategicFit",
+        "score": 90,
+        "confidence": 0.85,
+        "rationale": "baselinePrompt を中心に、評価、比較、改善案生成を固定化する目的と実装構成が強く一致しています。対象ユーザーを coding agents に絞っている点も戦略的に明確です。",
+        "evidence": [
+          "projectIdeal が価値提供、実装、検証、文書、agent usability を明示している",
+          "targetWorkflow が evaluate project value and generate next improvements と定義されている",
+          "README と LLM_CONTEXT が同じ中核 flow を繰り返し説明している"
+        ],
+        "concerns": [
+          "人間向け SaaS ではなく agent-first に寄せているため、市場範囲は狭い",
+          "評価品質を高める evidence collector がまだ後続扱い"
+        ]
+      },
+      {
+        "key": "ossProductValue",
+        "label": "ossProductValue",
+        "score": 77,
+        "confidence": 0.72,
+        "rationale": "MIT、README、CLI/API、明確な niche により OSS として公開価値はあります。ただし、初見利用者がすぐ価値を体験できるサンプル出力、実行デモ、provider 設定の実働証跡は不足気味です。",
+        "evidence": [
+          "license が MIT",
+          "package keywords に project-evaluation と coding-agents がある",
+          "README に setup と CLI/API がある"
+        ],
+        "concerns": [
+          "公開利用者向けの quickstart 成功例が薄い",
+          "Codex SDK 依存と provider 設定が導入障壁になる可能性がある"
+        ]
+      }
+    ],
+    "strengths": [
+      "baseline prompt を中心に評価依頼を構造化し、履歴と改善案まで保存する価値が明確です。",
+      "CLI、API、shared schema、DB migration、frontend、テストが揃い、MVP の実装面はかなり具体化されています。",
+      "Evidence Policy により、LLM 評価と audit-grade evidence を混同しない設計判断ができています。",
+      "LLM_CONTEXT と README が agent 向けの実行契約、検証方針、non-goals を明確にしています。",
+      "未実装 provider を暗黙 fallback しない方針は、評価結果の信頼性に効きます。"
+    ],
+    "weaknesses": [
+      "実際の verify、CLI 実行、API 実行、UI 操作の証跡が今回の bundle には含まれていません。",
+      "provider adapter 境界は設計されていますが、Codex 以外の実装価値はまだ限定的です。",
+      "rootPath と provider credential 周辺の安全性は、提供コンテキストだけでは十分に確認できません。",
+      "bundle-builder が移行対象として残っており、責務境界の整理が未完了に見えます。",
+      "OSS 初見利用者向けのサンプル出力と成功パスがまだ弱いです。"
+    ],
+    "improvementIdeas": [
+      {
+        "title": "評価 artifact の実行サンプルを固定する",
+        "reason": "CLI/API/UI が同じ評価 usecase を呼ぶことを、保存済み JSON とコマンド出力で確認できるようにすると、agent と人間の双方が価値を判断しやすくなります。",
+        "expectedScoreImpact": 4,
+        "affectedDimensions": [
+          "documentation",
+          "agentUsability",
+          "reliability",
+          "ossProductValue"
+        ],
+        "suggestedPrompt": "CLI の --json 出力、reevaluate の delta 出力、API response の代表例を spec/baselines に保存し、README から参照できるようにしてください。",
+        "acceptanceCriteria": [
+          "evaluator:evaluate --json の代表出力が保存されている",
+          "reevaluate の delta を含む代表出力が保存されている",
+          "README からサンプル artifact へ辿れる"
+        ]
+      },
+      {
+        "title": "rootPath と credential 境界の安全性を明文化する",
+        "reason": "評価対象 repo path と provider credential を扱うため、アクセス境界と秘密情報の扱いを明確にすると security と信頼性が上がります。",
+        "expectedScoreImpact": 5,
+        "affectedDimensions": [
+          "security",
+          "reliability",
+          "documentation"
+        ],
+        "suggestedPrompt": "ProjectProfile の rootPath validation、許可 root、秘密情報の保存禁止、provider env の扱いを実装または仕様化し、テストで確認してください。",
+        "acceptanceCriteria": [
+          "rootPath validation の仕様またはテストがある",
+          "path traversal や存在しない path の扱いが明示されている",
+          "provider secret を report や raw output に含めない方針が確認できる"
+        ]
+      },
+      {
+        "title": "bundle-builder の責務を分離する",
+        "reason": "移行対象が残ると、baseline 評価と将来の evidence collector の境界が曖昧になりやすいです。",
+        "expectedScoreImpact": 3,
+        "affectedDimensions": [
+          "architectureQuality",
+          "maintainability",
+          "extensibility"
+        ],
+        "suggestedPrompt": "bundle-builder を EvaluationPromptContext builder と evidence collector 準備領域に分け、baseline 評価では自動 verify や source inspection を行わない契約をコード構造にも反映してください。",
+        "acceptanceCriteria": [
+          "baseline context builder の責務が名前と API で明確になっている",
+          "evidence collector 予定の責務が baseline path と混ざっていない",
+          "既存の評価 service test が通る前提の設計になっている"
+        ]
+      },
+      {
+        "title": "provider adapter の実働境界をテストで固定する",
+        "reason": "Codex-first 方針は明確ですが、未実装 provider の失敗表現と fallback 禁止が壊れると評価結果の信頼性が落ちます。",
+        "expectedScoreImpact": 4,
+        "affectedDimensions": [
+          "reliability",
+          "testability",
+          "agentUsability",
+          "extensibility"
+        ],
+        "suggestedPrompt": "Codex adapter、未実装 provider、JSON schema 不一致、provider error の代表ケースを judge-client test に追加し、暗黙 fallback が起きないことを保証してください。",
+        "acceptanceCriteria": [
+          "adapter-not-implemented のテストがある",
+          "provider error が report または明示エラーとして扱われる",
+          "暗黙 fallback が発生しないことを検証している"
+        ]
+      },
+      {
+        "title": "README の quickstart を成功体験中心に補強する",
+        "reason": "OSS として使う人が最短で価値を確認できる導線があると、導入障壁が下がります。",
+        "expectedScoreImpact": 3,
+        "affectedDimensions": [
+          "documentation",
+          "ossProductValue",
+          "agentUsability"
+        ],
+        "suggestedPrompt": "セットアップ後に一つのサンプル repo を評価し、出力 JSON、保存履歴、再評価 delta まで確認する quickstart を README に追加してください。",
+        "acceptanceCriteria": [
+          "初回セットアップから評価実行までの手順が一続きで書かれている",
+          "期待される出力の要点が示されている",
+          "失敗しやすい provider 設定の注意点がある"
+        ]
+      }
+    ],
+    "notVerified": [
+      "ファイル内容の追加 inspection は行っていません。",
+      "bun run verify、typecheck、lint、test、build は実行していません。",
+      "CLI、API、UI の実働は確認していません。",
+      "SQLite migration の適用可否は確認していません。",
+      "Codex SDK と provider adapter の実通信は確認していません。",
+      "rootPath validation と credential redaction の実装詳細は確認していません。"
+    ]
+  },
+  "delta": {
+    "previousEvaluationId": "a7e074d4-09ef-43f1-bbb0-b8904001a8d2",
+    "scoreDelta": 1,
+    "confidenceDelta": -0.04,
+    "dimensionDeltas": [
+      {
+        "key": "conceptValue",
+        "previousScore": 88,
+        "currentScore": 89,
+        "delta": 1
+      },
+      {
+        "key": "implementationCompleteness",
+        "previousScore": 79,
+        "currentScore": 82,
+        "delta": 3
+      },
+      {
+        "key": "architectureQuality",
+        "previousScore": 84,
+        "currentScore": 84,
+        "delta": 0
+      },
+      {
+        "key": "maintainability",
+        "previousScore": 81,
+        "currentScore": 82,
+        "delta": 1
+      },
+      {
+        "key": "security",
+        "previousScore": 72,
+        "currentScore": 74,
+        "delta": 2
+      },
+      {
+        "key": "testability",
+        "previousScore": 87,
+        "currentScore": 86,
+        "delta": -1
+      },
+      {
+        "key": "documentation",
+        "previousScore": 80,
+        "currentScore": 83,
+        "delta": 3
+      },
+      {
+        "key": "agentUsability",
+        "previousScore": 86,
+        "currentScore": 88,
+        "delta": 2
+      },
+      {
+        "key": "extensibility",
+        "previousScore": 80,
+        "currentScore": 82,
+        "delta": 2
+      },
+      {
+        "key": "reliability",
+        "previousScore": 79,
+        "currentScore": 80,
+        "delta": 1
+      },
+      {
+        "key": "strategicFit",
+        "previousScore": 89,
+        "currentScore": 90,
+        "delta": 1
+      },
+      {
+        "key": "ossProductValue",
+        "previousScore": 75,
+        "currentScore": 77,
+        "delta": 2
+      }
+    ],
+    "newWeaknesses": [
+      "実際の verify、CLI 実行、API 実行、UI 操作の証跡が今回の bundle には含まれていません。",
+      "provider adapter 境界は設計されていますが、Codex 以外の実装価値はまだ限定的です。",
+      "rootPath と provider credential 周辺の安全性は、提供コンテキストだけでは十分に確認できません。",
+      "bundle-builder が移行対象として残っており、責務境界の整理が未完了に見えます。",
+      "OSS 初見利用者向けのサンプル出力と成功パスがまだ弱いです。"
+    ],
+    "resolvedWeaknesses": [
+      "Evidence Policy と実装の自動 verify 実行の不整合を解消する",
+      "Judge provider 境界の実装証跡を評価 bundle に含める",
+      "CLI/API/UI のサンプル出力を保存してレビュー可能にする",
+      "評価対象 rootPath とファイルアクセス境界の安全性を確認する",
+      "bundle-builder の責務を evidence collector と prompt context builder に分ける"
+    ]
+  }
+}

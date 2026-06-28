@@ -74,10 +74,12 @@ export const projectProfiles = sqliteTable(
 		updatedAt: integer("updated_at", { mode: "timestamp" })
 			.$defaultFn(() => new Date())
 			.notNull(),
+		deletedAt: integer("deleted_at", { mode: "timestamp" }),
 	},
 	(table) => ({
 		nameIdx: index("project_profiles_name_idx").on(table.name),
 		rootPathIdx: index("project_profiles_root_path_idx").on(table.rootPath),
+		deletedAtIdx: index("project_profiles_deleted_at_idx").on(table.deletedAt),
 	}),
 );
 
@@ -130,6 +132,9 @@ export const projectEvaluations = sqliteTable(
 		dimensionsJson: text("dimensions_json").notNull(),
 		strengthsJson: text("strengths_json").notNull(),
 		gapsTo100Json: text("gaps_to_100_json").notNull(),
+		sourceInspectionsJson: text("source_inspections_json")
+			.notNull()
+			.default("[]"),
 		notVerifiedJson: text("not_verified_json").notNull(),
 		nextEvidenceToCollectJson: text("next_evidence_to_collect_json")
 			.notNull()
@@ -138,6 +143,10 @@ export const projectEvaluations = sqliteTable(
 		scoreDelta: integer("score_delta"),
 		previousConfidence: integer("previous_confidence"),
 		confidenceDelta: integer("confidence_delta"),
+		baselinePrompt: text("baseline_prompt"),
+		judgeSettingsJson: text("judge_settings_json"),
+		reportJson: text("report_json"),
+		deltaJson: text("delta_json"),
 		rawOutputJson: text("raw_output_json").notNull().default("{}"),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.$defaultFn(() => new Date())
@@ -184,5 +193,35 @@ export const improvementRequests = sqliteTable(
 			table.evaluationId,
 		),
 		priorityIdx: index("improvement_requests_priority_idx").on(table.priority),
+	}),
+);
+
+export const evaluationActivityEvents = sqliteTable(
+	"evaluation_activity_events",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => randomUUID()),
+		evaluationId: text("evaluation_id")
+			.notNull()
+			.references(() => projectEvaluations.id, { onDelete: "cascade" }),
+		seq: integer("seq").notNull(),
+		phase: text("phase").notNull(),
+		level: text("level").notNull(),
+		source: text("source").notNull(),
+		message: text("message").notNull(),
+		status: text("status"),
+		payloadJson: text("payload_json"),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.$defaultFn(() => new Date())
+			.notNull(),
+	},
+	(table) => ({
+		evaluationIdIdx: index("evaluation_activity_events_evaluation_id_idx").on(
+			table.evaluationId,
+		),
+		evaluationSeqIdx: uniqueIndex(
+			"evaluation_activity_events_evaluation_seq_idx",
+		).on(table.evaluationId, table.seq),
 	}),
 );

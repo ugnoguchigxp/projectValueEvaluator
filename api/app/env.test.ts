@@ -19,7 +19,7 @@ describe("readAppEnv", () => {
 			DATABASE_URL: "tmp/test.sqlite",
 			JWT_SECRET: "x".repeat(32),
 			APP_URL: "https://showcase.example.com",
-			CORS_ORIGINS: "https://showcase.example.com,http://localhost:5173",
+			CORS_ORIGINS: "https://showcase.example.com,http://localhost:39160",
 			AUTH_COOKIE_SECURE: "true",
 			AUTH_COOKIE_SAME_SITE: "none",
 			SECURITY_HEADERS_MODE: "https",
@@ -30,11 +30,19 @@ describe("readAppEnv", () => {
 		expect(env.appUrl).toBe("https://showcase.example.com");
 		expect(env.corsOrigins).toEqual([
 			"https://showcase.example.com",
-			"http://localhost:5173",
+			"http://localhost:39160",
 		]);
 		expect(env.secureCookie).toBe(true);
 		expect(env.cookieSameSite).toBe("none");
 		expect(env.securityHeadersMode).toBe("https");
+	});
+
+	it("rejects network database URLs for the SQLite runtime", () => {
+		expect(() =>
+			readAppEnv({
+				DATABASE_URL: "postgres://postgres:postgres@127.0.0.1:5432/app",
+			}),
+		).toThrow(/SQLite file path/);
 	});
 
 	it("rejects SameSite none without secure cookies", () => {

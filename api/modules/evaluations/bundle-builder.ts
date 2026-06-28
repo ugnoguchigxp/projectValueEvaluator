@@ -3,11 +3,18 @@ import type { Dirent } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import {
+	defaultBaselinePrompt,
 	evaluationBundleSchema,
 	type EvaluationBundle,
+	type EvaluationComparisonInput,
+	type JudgeSelection,
+	type JudgeSettings,
 	type ProjectValueEvaluation,
 } from "../../../shared/schemas/evaluation.schema";
-import type { ProjectProfile } from "../../../shared/schemas/project.schema";
+import {
+	evaluationDimensionLabels,
+	type ProjectProfile,
+} from "../../../shared/schemas/project.schema";
 
 const IGNORED_TREE_ENTRIES = new Set([
 	".git",
@@ -28,6 +35,71 @@ const IGNORED_TREE_ENTRIES = new Set([
 const MAX_TEXT_CHARS = 24_000;
 const MAX_TREE_ENTRIES = 360;
 const MAX_TREE_DEPTH = 4;
+
+function sanitizeProjectIdeal(
+	project: ProjectProfile,
+	projectRoot: string,
+): string | undefined {
+	const rootName = path.basename(projectRoot).toLowerCase();
+	const projectName = project.name.toLowerCase();
+	const ideal = project.ideal.trim();
+	const referencesEvaluator = /project[-\s]?value[-\s]?evaluator/i.test(ideal);
+	const targetIsEvaluator =
+		/project[-\s]?value[-\s]?evaluator/i.test(projectName) ||
+		/project[-\s]?evaluator/i.test(rootName);
+	if (referencesEvaluator && !targetIsEvaluator) {
+		return undefined;
+	}
+	return ideal;
+}
+
+function judgeSelectionToSettings(judge?: JudgeSelection): JudgeSettings {
+	if (judge?.type === "codex-agent") {
+		return {
+			provider: "codex",
+			model: judge.model,
+			codexMode: judge.mode,
+			status: "ready",
+		};
+	}
+	if (judge?.type === "llm-provider") {
+		return {
+			provider:
+				judge.provider === "deterministic-fallback" ? "openai" : judge.provider,
+			model: judge.model,
+			endpoint: judge.endpoint,
+			apiKeyRef: judge.apiKeyRef,
+			status: "adapter-not-implemented",
+		};
+	}
+	return {
+		provider: "codex",
+		model: "gpt-5.5",
+		codexMode: "review-only",
+		status: "ready",
+	};
+}
+
+function previousEvaluationToComparisonInput(
+	evaluation?: ProjectValueEvaluation | null,
+): EvaluationComparisonInput | undefined {
+	if (!evaluation) return undefined;
+	return {
+		evaluationId: evaluation.id,
+		overallScore: evaluation.report?.overallScore ?? evaluation.score,
+		confidence: evaluation.report?.confidence ?? evaluation.overallConfidence,
+		dimensions: (evaluation.report?.dimensions ?? evaluation.dimensions).map(
+			(dimension) => ({
+				key: dimension.key,
+				score: dimension.score,
+			}),
+		),
+		weaknesses:
+			evaluation.report?.weaknesses ??
+			evaluation.gapsTo100.map((gap) => gap.title),
+		createdAt: evaluation.createdAt,
+	};
+}
 
 async function readOptionalText(
 	root: string,
@@ -100,6 +172,8 @@ export async function buildEvaluationBundle(params: {
 	project: ProjectProfile;
 	projectRoot?: string;
 	previousEvaluation?: ProjectValueEvaluation | null;
+	judge?: JudgeSelection;
+	baselinePrompt?: string;
 }): Promise<EvaluationBundle> {
 	const projectRoot = path.resolve(
 		params.projectRoot ?? params.project.rootPath,
@@ -127,19 +201,25 @@ export async function buildEvaluationBundle(params: {
 		missingInputs.push("repo-tree");
 	}
 	const scripts = packageScripts(packageJson);
-	const notVerified = [
-		"local build",
-		"test execution",
-		"runtime behavior",
-		"sample output quality",
-		"audit-grade security behavior",
-	];
-
-	return evaluationBundleSchema.parse({
-		id: randomUUID(),
-		projectId: params.project.id,
-		evidenceLevel: "repo-structure",
+	const baselinePrompt = params.baselinePrompt ?? defaultBaselinePrompt;
+	const projectIdeal = sanitizeProjectIdeal(params.project, projectRoot);
+	const promptContext = {
+		schemaVersion: "evaluation-prompt-context/v1" as const,
+		baselinePrompt,
+		projectName: params.project.name,
 		projectRoot,
+		projectIdeal,
+		primaryAudience: params.project.primaryAudience,
+		targetWorkflow: params.project.targetWorkflow,
+		nonGoals: params.project.nonGoals,
+		dimensions: params.project.dimensions.map((key) => ({
+			key,
+			label: evaluationDimensionLabels[key],
+		})),
+		judgeSettings: judgeSelectionToSettings(params.judge),
+		previousEvaluation: previousEvaluationToComparisonInput(
+			params.previousEvaluation,
+		),
 		inputs: {
 			readme,
 			llmContext,
@@ -147,6 +227,33 @@ export async function buildEvaluationBundle(params: {
 			packageJson,
 			repoTree,
 			scripts,
+		},
+	};
+	const notVerified = [
+		"ローカルビルド",
+		"テスト実行",
+		"ランタイム挙動",
+		"ソースコード全量の監査",
+		"サンプル出力の品質",
+		"監査級のセキュリティ挙動",
+	].filter((value): value is string => Boolean(value));
+
+	return evaluationBundleSchema.parse({
+		id: randomUUID(),
+		projectId: params.project.id,
+		evidenceLevel: "repo-structure",
+		projectRoot,
+		inputs: {
+			promptContext,
+			readme,
+			llmContext,
+			agents,
+			packageJson,
+			repoTree,
+			scripts,
+			sourceInspectionPlan: [],
+			sourceFiles: [],
+			verificationRuns: [],
 			previousEvaluation: params.previousEvaluation ?? undefined,
 		},
 		inspectedInputs: {

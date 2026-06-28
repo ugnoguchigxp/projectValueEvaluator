@@ -1,14 +1,17 @@
 import { asc, desc, eq } from "drizzle-orm";
 import type { BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
 import {
+	evaluationActivityEventSchema,
 	evaluationBundleSchema,
 	improvementRequestSchema,
 	projectValueEvaluationSchema,
+	type EvaluationActivityEvent,
 	type EvaluationBundle,
 	type ImprovementRequest,
 	type ProjectValueEvaluation,
 } from "../../../shared/schemas/evaluation.schema";
 import {
+	evaluationActivityEvents,
 	evaluationBundles,
 	improvementRequests,
 	projectEvaluations,
@@ -59,6 +62,7 @@ function toProjectValueEvaluation(
 		dimensions: parseJson(row.dimensionsJson),
 		strengths: parseJson(row.strengthsJson),
 		gapsTo100: parseJson(row.gapsTo100Json),
+		sourceInspections: parseJson(row.sourceInspectionsJson),
 		notVerified: parseJson(row.notVerifiedJson),
 		nextEvidenceToCollect: parseJson(row.nextEvidenceToCollectJson),
 		previousScore: row.previousScore ?? undefined,
@@ -68,6 +72,13 @@ function toProjectValueEvaluation(
 			row.confidenceDelta === null
 				? undefined
 				: storedToRatioDelta(row.confidenceDelta),
+		baselinePrompt: row.baselinePrompt ?? undefined,
+		judgeSettings:
+			row.judgeSettingsJson === null
+				? undefined
+				: parseJson(row.judgeSettingsJson),
+		report: row.reportJson === null ? undefined : parseJson(row.reportJson),
+		delta: row.deltaJson === null ? undefined : parseJson(row.deltaJson),
 		createdAt: toIso(row.createdAt),
 	});
 }
@@ -90,6 +101,25 @@ function toImprovementRequest(
 		prompt: row.prompt,
 		acceptanceCriteria: parseJson(row.acceptanceCriteriaJson),
 		verificationCommands: parseJson(row.verificationCommandsJson),
+		createdAt: toIso(row.createdAt),
+	});
+}
+
+function toEvaluationActivityEvent(
+	row: typeof evaluationActivityEvents.$inferSelect,
+): EvaluationActivityEvent {
+	return evaluationActivityEventSchema.parse({
+		id: row.id,
+		seq: row.seq,
+		phase: row.phase,
+		level: row.level,
+		source: row.source,
+		message: row.message,
+		status: row.status ?? undefined,
+		payload:
+			row.payloadJson === null
+				? undefined
+				: parseJson<unknown>(row.payloadJson),
 		createdAt: toIso(row.createdAt),
 	});
 }
@@ -133,6 +163,7 @@ export class EvaluationRepository {
 				dimensionsJson: JSON.stringify(evaluation.dimensions),
 				strengthsJson: JSON.stringify(evaluation.strengths),
 				gapsTo100Json: JSON.stringify(evaluation.gapsTo100),
+				sourceInspectionsJson: JSON.stringify(evaluation.sourceInspections),
 				notVerifiedJson: JSON.stringify(evaluation.notVerified),
 				nextEvidenceToCollectJson: JSON.stringify(
 					evaluation.nextEvidenceToCollect,
@@ -147,6 +178,19 @@ export class EvaluationRepository {
 					evaluation.confidenceDelta === undefined
 						? undefined
 						: ratioDeltaToStored(evaluation.confidenceDelta),
+				baselinePrompt: evaluation.baselinePrompt,
+				judgeSettingsJson:
+					evaluation.judgeSettings === undefined
+						? undefined
+						: JSON.stringify(evaluation.judgeSettings),
+				reportJson:
+					evaluation.report === undefined
+						? undefined
+						: JSON.stringify(evaluation.report),
+				deltaJson:
+					evaluation.delta === undefined
+						? undefined
+						: JSON.stringify(evaluation.delta),
 				rawOutputJson: JSON.stringify(rawOutput),
 				createdAt: new Date(evaluation.createdAt),
 			})
@@ -191,15 +235,43 @@ export class EvaluationRepository {
 		return rows.map(toImprovementRequest);
 	}
 
+	async createActivityEvents(
+		evaluationId: string,
+		activityEvents: EvaluationActivityEvent[],
+	): Promise<EvaluationActivityEvent[]> {
+		if (activityEvents.length === 0) return [];
+		const rows = await this.db
+			.insert(evaluationActivityEvents)
+			.values(
+				activityEvents.map((event) => ({
+					id: event.id,
+					evaluationId,
+					seq: event.seq,
+					phase: event.phase,
+					level: event.level,
+					source: event.source,
+					message: event.message,
+					status: event.status,
+					payloadJson:
+						event.payload === undefined ? null : JSON.stringify(event.payload),
+					createdAt: new Date(event.createdAt),
+				})),
+			)
+			.returning();
+		return rows.map(toEvaluationActivityEvent);
+	}
+
 	async createEvaluationRun(params: {
 		bundle: EvaluationBundle;
 		evaluation: ProjectValueEvaluation;
 		rawOutput: unknown;
 		improvements: ImprovementRequest[];
+		activityEvents?: EvaluationActivityEvent[];
 	}): Promise<{
 		bundle: EvaluationBundle;
 		evaluation: ProjectValueEvaluation;
 		improvements: ImprovementRequest[];
+		activityEvents: EvaluationActivityEvent[];
 	}> {
 		return this.db.transaction((tx) => {
 			const bundleRow = tx
@@ -233,6 +305,9 @@ export class EvaluationRepository {
 					dimensionsJson: JSON.stringify(params.evaluation.dimensions),
 					strengthsJson: JSON.stringify(params.evaluation.strengths),
 					gapsTo100Json: JSON.stringify(params.evaluation.gapsTo100),
+					sourceInspectionsJson: JSON.stringify(
+						params.evaluation.sourceInspections,
+					),
 					notVerifiedJson: JSON.stringify(params.evaluation.notVerified),
 					nextEvidenceToCollectJson: JSON.stringify(
 						params.evaluation.nextEvidenceToCollect,
@@ -247,6 +322,19 @@ export class EvaluationRepository {
 						params.evaluation.confidenceDelta === undefined
 							? undefined
 							: ratioDeltaToStored(params.evaluation.confidenceDelta),
+					baselinePrompt: params.evaluation.baselinePrompt,
+					judgeSettingsJson:
+						params.evaluation.judgeSettings === undefined
+							? undefined
+							: JSON.stringify(params.evaluation.judgeSettings),
+					reportJson:
+						params.evaluation.report === undefined
+							? undefined
+							: JSON.stringify(params.evaluation.report),
+					deltaJson:
+						params.evaluation.delta === undefined
+							? undefined
+							: JSON.stringify(params.evaluation.delta),
 					rawOutputJson: JSON.stringify(params.rawOutput),
 					createdAt: new Date(params.evaluation.createdAt),
 				})
@@ -286,10 +374,35 @@ export class EvaluationRepository {
 							)
 							.returning()
 							.all();
+			const activityRows =
+				params.activityEvents?.length === 0 || !params.activityEvents
+					? []
+					: tx
+							.insert(evaluationActivityEvents)
+							.values(
+								params.activityEvents.map((event) => ({
+									id: event.id,
+									evaluationId: params.evaluation.id,
+									seq: event.seq,
+									phase: event.phase,
+									level: event.level,
+									source: event.source,
+									message: event.message,
+									status: event.status,
+									payloadJson:
+										event.payload === undefined
+											? null
+											: JSON.stringify(event.payload),
+									createdAt: new Date(event.createdAt),
+								})),
+							)
+							.returning()
+							.all();
 			return {
 				bundle: toEvaluationBundle(bundleRow),
 				evaluation: toProjectValueEvaluation(evaluationRow),
 				improvements: improvementRows.map(toImprovementRequest),
+				activityEvents: activityRows.map(toEvaluationActivityEvent),
 			};
 		});
 	}
@@ -304,6 +417,16 @@ export class EvaluationRepository {
 		return row ? toProjectValueEvaluation(row) : null;
 	}
 
+	async findEvaluationsByProjectId(
+		projectId: string,
+	): Promise<ProjectValueEvaluation[]> {
+		const rows = await this.db.query.projectEvaluations.findMany({
+			where: eq(projectEvaluations.projectId, projectId),
+			orderBy: [desc(projectEvaluations.createdAt)],
+		});
+		return rows.map(toProjectValueEvaluation);
+	}
+
 	async findEvaluationById(
 		evaluationId: string,
 	): Promise<ProjectValueEvaluation | null> {
@@ -311,6 +434,23 @@ export class EvaluationRepository {
 			where: eq(projectEvaluations.id, evaluationId),
 		});
 		return row ? toProjectValueEvaluation(row) : null;
+	}
+
+	async findBundleById(bundleId: string): Promise<EvaluationBundle | null> {
+		const row = await this.db.query.evaluationBundles.findFirst({
+			where: eq(evaluationBundles.id, bundleId),
+		});
+		return row ? toEvaluationBundle(row) : null;
+	}
+
+	async findActivityEventsByEvaluationId(
+		evaluationId: string,
+	): Promise<EvaluationActivityEvent[]> {
+		const rows = await this.db.query.evaluationActivityEvents.findMany({
+			where: eq(evaluationActivityEvents.evaluationId, evaluationId),
+			orderBy: [asc(evaluationActivityEvents.seq)],
+		});
+		return rows.map(toEvaluationActivityEvent);
 	}
 
 	async findImprovementsByEvaluationId(

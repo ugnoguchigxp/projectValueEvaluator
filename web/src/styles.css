@@ -171,6 +171,724 @@
 		@apply mb-[22px] mt-0 text-lg leading-[1.6] text-muted;
 	}
 
+	.evaluator-shell {
+		--evaluator-accent: var(--showcase-accent, var(--color-brand));
+		--evaluator-accent-strong: var(
+			--showcase-accent-strong,
+			var(--color-brand-strong)
+		);
+		--evaluator-accent-soft: var(
+			--showcase-accent-soft,
+			var(--color-brand-soft)
+		);
+		--evaluator-accent-surface: var(--showcase-accent-surface, #f6fffb);
+		--evaluator-accent-border: var(
+			--showcase-accent-border,
+			var(--color-brand-border)
+		);
+		--evaluator-accent-text: var(
+			--showcase-accent-text,
+			var(--color-brand-strong)
+		);
+		--evaluator-focus-ring: var(
+			--showcase-focus-ring,
+			rgba(31, 122, 106, 0.12)
+		);
+		--evaluator-page: var(--showcase-page, var(--color-page));
+		--evaluator-surface: var(--showcase-surface, var(--color-surface));
+		--evaluator-surface-muted: var(
+			--showcase-surface-muted,
+			var(--color-surface-muted)
+		);
+		--evaluator-border: var(--showcase-border, var(--color-border));
+		--evaluator-border-strong: var(--showcase-border-strong, #cbd7e2);
+		--evaluator-ink: var(--showcase-ink, var(--color-ink));
+		--evaluator-muted: var(--showcase-muted, var(--color-muted));
+		--evaluator-muted-strong: var(
+			--showcase-muted-strong,
+			var(--color-muted-strong)
+		);
+		--evaluator-on-accent: var(--showcase-on-accent, #ffffff);
+		--evaluator-shadow: var(--showcase-shadow, rgba(23, 32, 42, 0.08));
+		--evaluator-danger: var(--showcase-danger, var(--color-danger));
+		--evaluator-danger-surface: var(--showcase-danger-surface, #fff1f1);
+		--evaluator-danger-border: var(--showcase-danger-border, #efb5b5);
+		--evaluator-gap: var(--showcase-gap, 16px);
+		--evaluator-gap-tight: var(--showcase-gap-tight, 10px);
+		--evaluator-gap-loose: var(--showcase-gap-loose, 32px);
+		--evaluator-card-padding: var(--showcase-card-padding, 20px);
+		--evaluator-control-height: var(--showcase-control-height, 38px);
+		--evaluator-input-height: var(--showcase-input-height, 40px);
+		--evaluator-control-radius: var(--showcase-control-radius, 8px);
+		--evaluator-card-radius: var(--showcase-card-radius, 8px);
+		--evaluator-panel-radius: var(--showcase-panel-radius, 8px);
+		--evaluator-font-size: max(var(--showcase-font-size, 16px), 17px);
+		--evaluator-font-size-small: max(
+			var(--showcase-font-size-small, 13px),
+			14px
+		);
+		--evaluator-heading-size: max(var(--showcase-heading-size, 24px), 27px);
+		--evaluator-card-title-size: max(
+			var(--showcase-card-title-size, 18px),
+			20px
+		);
+		@apply mx-auto;
+		width: min(100%, 1440px);
+		min-height: calc(100vh - 64px);
+		color: var(--evaluator-ink);
+		font-size: var(--evaluator-font-size);
+	}
+
+	.evaluator-header {
+		@apply flex flex-col items-start gap-3 border-b border-border pb-5;
+	}
+
+	.evaluator-header h1 {
+		@apply m-0 text-[clamp(30px,4vw,46px)] leading-none tracking-normal;
+	}
+
+	.evaluator-header p {
+		@apply m-0 text-lg leading-normal text-muted;
+	}
+
+	.evaluator-alert,
+	.evaluator-note {
+		@apply flex items-center gap-2 rounded-control border px-3 py-2 text-sm font-bold;
+	}
+
+	.workspace-actions .evaluator-note {
+		@apply min-h-9 px-2.5 py-1.5;
+	}
+
+	.evaluator-alert,
+	.evaluator-note.blocked {
+		@apply border-[#efb5b5] bg-[#fff1f1] text-danger;
+	}
+
+	.evaluator-note.ready {
+		@apply border-brand-border bg-brand-soft text-brand-strong;
+	}
+
+	.evaluator-layout {
+		@apply grid gap-5;
+		grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+		min-height: calc(100vh - 64px);
+	}
+
+	.evaluator-panel,
+	.empty-results {
+		@apply rounded-control border border-border bg-surface;
+	}
+
+	.evaluator-controls {
+		@apply sticky top-16 flex max-h-[calc(100vh-64px)] flex-col gap-3 border-r border-border bg-surface px-3 py-3;
+	}
+
+	.evaluator-results {
+		@apply flex min-w-0 flex-col gap-5 px-5 py-5;
+	}
+
+	.evaluator-workspace-header,
+	.workspace-actions {
+		@apply flex items-center gap-3;
+	}
+
+	.evaluator-sidebar-section {
+		@apply flex min-h-0 flex-col gap-2;
+	}
+
+	.evaluator-sidebar-section,
+	.evaluator-sidebar-section.fill {
+		@apply flex-1;
+	}
+
+	.evaluator-workspace-header {
+		@apply min-w-0 justify-between gap-4 border-b border-border pb-4;
+	}
+
+	.workspace-title-block {
+		@apply min-w-0;
+	}
+
+	.workspace-title-block .showcase-kicker {
+		@apply mb-2;
+	}
+
+	.workspace-title-block h1 {
+		@apply m-0 truncate text-3xl leading-none tracking-normal;
+	}
+
+	.workspace-title-block p {
+		@apply mb-0 mt-2 truncate text-sm text-muted;
+	}
+
+	.workspace-actions {
+		@apply shrink-0 flex-wrap justify-end;
+	}
+
+	.evaluator-section-heading,
+	.evaluator-panel-header {
+		@apply flex items-center justify-between gap-3;
+	}
+
+	.evaluator-section-heading {
+		@apply pt-1;
+	}
+
+	.evaluator-section-title {
+		@apply flex min-w-0 items-center gap-3;
+	}
+
+	.evaluator-section-heading h2,
+	.evaluator-panel-header h2,
+	.empty-results h2 {
+		@apply m-0 text-base font-extrabold tracking-normal;
+	}
+
+	.evaluator-panel-header p {
+		@apply mb-0 mt-1 leading-normal text-muted;
+		font-size: var(--evaluator-font-size);
+	}
+
+	.evaluator-two-column,
+	.score-grid,
+	.evidence-grid {
+		@apply grid gap-3;
+	}
+
+	.evaluator-two-column {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.evaluator-textarea {
+		@apply min-h-28 p-3;
+	}
+
+	.evaluator-textarea.compact {
+		@apply min-h-20;
+	}
+
+	.evaluator-actions {
+		@apply flex flex-wrap gap-2 pt-1;
+	}
+
+	.project-new-button,
+	.path-picker-icon {
+		@apply size-9;
+	}
+
+	.project-list,
+	.history-list,
+	.profile-form {
+		@apply flex flex-col gap-2;
+	}
+
+	.project-list,
+	.history-list {
+		@apply min-h-0 overflow-auto pr-1;
+		@apply m-0 list-none p-0;
+	}
+
+	.project-list {
+		@apply flex-1;
+	}
+
+	.project-folder {
+		@apply min-w-0;
+	}
+
+	.project-folder-row {
+		@apply grid items-center rounded-control border border-transparent;
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
+	.project-folder-row:hover,
+	.project-folder-row.active {
+		@apply border-brand-border bg-brand-soft;
+	}
+
+	.project-folder-meta {
+		@apply flex shrink-0 items-center gap-1.5 text-muted;
+	}
+
+	.project-duplicate-count {
+		@apply grid size-5 place-items-center rounded-full border border-border-strong bg-surface text-[11px] font-extrabold text-muted-strong;
+	}
+
+	.project-delete-button {
+		@apply mr-1 grid size-8 place-items-center rounded-control border border-transparent bg-transparent text-muted;
+	}
+
+	.project-delete-button:hover {
+		@apply border-[#efb5b5] bg-[#fff1f1] text-danger;
+	}
+
+	.project-history-list {
+		@apply ml-4 mt-1 border-l border-border pl-2;
+	}
+
+	.project-list-item,
+	.history-list-item {
+		@apply flex w-full min-w-0 items-center justify-between gap-3 rounded-control border border-transparent bg-transparent px-2.5 py-2 text-left text-ink;
+	}
+
+	.history-list-item:hover:not(:disabled),
+	.history-list-item.active {
+		@apply border-brand-border bg-brand-soft;
+	}
+
+	.project-list-item > span {
+		@apply flex min-w-0 flex-col gap-1;
+	}
+
+	.project-list-item strong,
+	.history-list-item strong {
+		@apply truncate text-sm leading-none tracking-normal;
+	}
+
+	.project-list-item small,
+	.history-list-item small {
+		@apply truncate text-xs text-muted;
+	}
+
+	.project-history-list .history-list-item {
+		@apply py-2;
+	}
+
+	.history-list-item > small {
+		@apply shrink-0 whitespace-nowrap text-right;
+	}
+
+	.history-list-item strong small {
+		@apply text-sm text-muted;
+	}
+
+	.sidebar-empty {
+		@apply flex min-h-16 items-center justify-center gap-2 rounded-control border border-dashed border-border bg-[#fbfcfd] px-3 py-4 text-center text-sm font-bold text-muted;
+	}
+
+	.path-picker-row {
+		@apply flex min-w-0 gap-2;
+	}
+
+	.path-picker-input {
+		@apply min-w-0 flex-1;
+	}
+
+	.path-picker-button {
+		@apply shrink-0;
+	}
+
+	.evaluator-spin {
+		animation: evaluator-spin 0.9s linear infinite;
+	}
+
+	.score-grid {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+
+	.score-tile {
+		@apply flex min-h-[96px] min-w-0 flex-col justify-between rounded-control border border-border bg-[#f8fafc] p-4;
+	}
+
+	.score-tile.primary {
+		@apply border-brand-border bg-brand-soft;
+	}
+
+	.score-tile span {
+		@apply font-bold text-muted-strong;
+		font-size: var(--evaluator-font-size-small);
+	}
+
+	.score-tile strong {
+		@apply text-2xl leading-none tracking-normal;
+	}
+
+	.score-tile small {
+		@apply text-base text-muted;
+	}
+
+	.evaluator-panel,
+	.empty-results {
+		@apply p-5;
+	}
+
+	.project-composer-panel {
+		@apply max-w-3xl;
+	}
+
+	.composer-form {
+		@apply mt-4;
+	}
+
+	.dimension-list,
+	.workbench-list {
+		@apply mt-4 flex flex-col gap-2;
+	}
+
+	.dimension-row,
+	.workbench-item {
+		@apply grid gap-3 rounded-control border border-border bg-[#fbfcfd] p-3;
+	}
+
+	.dimension-row {
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		align-items: center;
+	}
+
+	.dimension-row.selected {
+		@apply border-brand bg-[#f2f7ff];
+	}
+
+	.dimension-select {
+		@apply flex h-10 w-10 items-center justify-center rounded-control border border-border bg-white;
+	}
+
+	.dimension-select input {
+		width: 18px;
+		height: 18px;
+		accent-color: var(--evaluator-accent, #2563eb);
+	}
+
+	.dimension-row strong,
+	.workbench-item h3 {
+		@apply m-0 font-extrabold tracking-normal;
+		font-size: 18px;
+		line-height: 1.3;
+	}
+
+	.dimension-row span,
+	.workbench-item p,
+	.empty-results p {
+		@apply m-0 leading-normal text-muted;
+		font-size: var(--evaluator-font-size);
+	}
+
+	.dimension-copy {
+		@apply flex min-w-0 flex-col gap-1;
+	}
+
+	.dimension-metrics,
+	.item-gain {
+		@apply flex flex-col items-end justify-center gap-1 text-right;
+	}
+
+	.dimension-metrics b,
+	.item-gain strong {
+		@apply text-lg leading-none;
+	}
+
+	.dimension-metrics small,
+	.item-gain span {
+		@apply font-bold uppercase text-muted;
+		font-size: var(--evaluator-font-size-small);
+	}
+
+	.improvement-action-panel {
+		@apply mt-4;
+	}
+
+	.improvement-action-row {
+		@apply mt-4 flex flex-wrap items-center justify-between gap-3;
+	}
+
+	.selected-dimension-summary {
+		@apply min-w-0 flex-1 rounded-control border border-border bg-[#fbfcfd] px-3 py-2 font-bold text-muted;
+		font-size: var(--evaluator-font-size-small);
+	}
+
+	.focused-improvement-list {
+		@apply mt-4 flex flex-col gap-3;
+	}
+
+	.focused-improvement-card {
+		@apply grid gap-4 rounded-control border border-border bg-[#fbfcfd] p-4;
+	}
+
+	.focused-improvement-card h3,
+	.focused-improvement-card h4 {
+		@apply m-0 font-extrabold tracking-normal;
+	}
+
+	.focused-improvement-card h3 {
+		font-size: 21px;
+		line-height: 1.25;
+	}
+
+	.focused-improvement-card h4 {
+		font-size: var(--evaluator-font-size);
+	}
+
+	.focused-improvement-card p,
+	.focused-improvement-card li {
+		@apply leading-normal text-muted;
+		font-size: var(--evaluator-font-size);
+	}
+
+	.focused-improvement-card p {
+		@apply m-0;
+	}
+
+	.focused-improvement-card ol,
+	.focused-improvement-card ul {
+		@apply m-0 pl-5;
+	}
+
+	.focused-improvement-card code {
+		@apply rounded-sm border border-border bg-white px-1 py-0.5;
+		font-size: var(--evaluator-font-size-small);
+	}
+
+	.focused-improvement-card-header,
+	.focused-improvement-card section {
+		@apply grid gap-2;
+	}
+
+	.focused-improvement-dimensions {
+		@apply mb-2 flex flex-wrap gap-2;
+	}
+
+	.focused-improvement-grid {
+		@apply grid gap-3;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.source-file-list {
+		@apply min-w-0 max-w-48;
+	}
+
+	.source-file-list small {
+		@apply max-w-full truncate font-medium normal-case text-muted;
+		font-size: var(--evaluator-font-size-small);
+	}
+
+	.evaluator-tabs {
+		@apply mb-4 w-fit max-w-full overflow-x-auto;
+		grid-auto-flow: column;
+		grid-auto-columns: max-content;
+		grid-template-columns: none;
+	}
+
+	.result-view-tabs {
+		@apply mb-0 w-fit max-w-full;
+	}
+
+	.result-view-switcher {
+		@apply inline-flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-control border border-border bg-[#eef3f8] p-1;
+	}
+
+	.result-view-switcher button {
+		min-height: 36px;
+		border-radius: calc(var(--evaluator-control-radius) - 2px);
+		@apply inline-flex items-center justify-center gap-2 whitespace-nowrap border-0 bg-transparent px-3 text-sm font-extrabold text-muted;
+	}
+
+	.result-view-switcher button.active {
+		box-shadow: 0 1px 3px rgba(23, 32, 42, 0.08);
+		@apply bg-surface text-ink;
+	}
+
+	.result-view-switcher .icon {
+		@apply text-base;
+	}
+
+	.tabs-list.evaluator-tabs button {
+		@apply min-h-8 gap-2 whitespace-nowrap px-3;
+		font-size: var(--evaluator-font-size-small);
+	}
+
+	.tabs-list.result-view-tabs button {
+		min-height: var(--evaluator-control-height);
+	}
+
+	.activity-panel {
+		@apply flex flex-col gap-4;
+	}
+
+	.activity-timeline {
+		@apply flex max-h-[560px] flex-col gap-2 overflow-auto pr-1;
+	}
+
+	.activity-diagnostics {
+		@apply grid gap-2 rounded-control border border-border bg-[#f8fafc] p-3 font-bold text-muted;
+		font-size: var(--evaluator-font-size-small);
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+
+	.activity-diagnostics span {
+		@apply flex min-w-0 flex-col gap-1;
+	}
+
+	.activity-diagnostics strong {
+		@apply uppercase text-muted-strong;
+		font-size: max(13px, calc(var(--evaluator-font-size-small) - 1px));
+	}
+
+	.activity-diagnostic-warning {
+		@apply border-l-2 border-danger pl-2 text-danger;
+	}
+
+	.activity-event {
+		@apply rounded-control border border-border bg-[#fbfcfd] p-3;
+	}
+
+	.activity-event.level-checkpoint {
+		@apply border-brand-border bg-brand-soft;
+	}
+
+	.activity-event.level-error {
+		@apply border-[#efb5b5] bg-[#fff1f1];
+	}
+
+	.activity-event-header {
+		@apply grid min-w-0 items-start gap-2;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+	}
+
+	.activity-event-header strong {
+		@apply min-w-0 leading-normal tracking-normal;
+		font-size: var(--evaluator-font-size);
+	}
+
+	.activity-event-header small,
+	.activity-event-meta {
+		@apply font-bold text-muted;
+		font-size: var(--evaluator-font-size-small);
+	}
+
+	.activity-event-meta {
+		@apply mt-2 flex flex-wrap gap-2;
+	}
+
+	.activity-event details {
+		@apply mt-3;
+	}
+
+	.activity-event summary {
+		@apply cursor-pointer font-extrabold uppercase text-muted-strong;
+		font-size: var(--evaluator-font-size-small);
+	}
+
+	.activity-event pre {
+		@apply mt-2 max-h-72 overflow-auto rounded-control border border-border bg-white p-3 leading-normal text-ink;
+		font-size: var(--evaluator-font-size-small);
+		white-space: pre-wrap;
+		word-break: break-word;
+	}
+
+	.workbench-item {
+		grid-template-columns: minmax(0, 1fr) minmax(86px, auto);
+	}
+
+	.workbench-item > div:first-child {
+		@apply flex min-w-0 flex-col items-start gap-2;
+	}
+
+	.workbench-item ul,
+	.evidence-grid ul {
+		@apply m-0 pl-5 leading-normal text-muted;
+		font-size: var(--evaluator-font-size);
+	}
+
+	.evidence-grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
+	.evidence-grid h3 {
+		@apply mb-2 mt-0 text-base tracking-normal;
+	}
+
+	.judge-snapshot {
+		@apply m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm;
+	}
+
+	.judge-snapshot dt {
+		@apply font-bold text-muted-strong;
+	}
+
+	.judge-snapshot dd {
+		@apply m-0 min-w-0 break-words text-muted;
+	}
+
+	.empty-results {
+		@apply grid min-h-[420px] place-items-center text-center;
+	}
+
+	.empty-results > .icon {
+		@apply size-12 text-brand;
+	}
+
+	.settings-workbench {
+		@apply grid gap-5;
+		grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+	}
+
+	.settings-summary-panel,
+	.provider-stack,
+	.provider-card,
+	.provider-card-header,
+	.settings-side-section,
+	.settings-side-panel {
+		@apply flex flex-col;
+	}
+
+	.settings-summary-panel,
+	.provider-stack,
+	.provider-card,
+	.settings-side-section,
+	.settings-side-panel {
+		@apply gap-4;
+	}
+
+	.provider-card {
+		@apply rounded-control border border-border bg-[#fbfcfd] p-4;
+	}
+
+	.provider-card.active {
+		@apply border-brand-border bg-brand-soft;
+	}
+
+	.provider-card-header {
+		@apply flex-row flex-wrap items-center gap-2;
+	}
+
+	.provider-active-button {
+		@apply inline-flex min-h-8 items-center gap-2 rounded-control border border-border-strong bg-surface px-2.5 text-sm font-extrabold text-muted-strong;
+	}
+
+	.provider-active-button input {
+		@apply size-4;
+	}
+
+	.provider-card.active .provider-active-button {
+		@apply border-brand-border bg-surface text-brand-strong;
+	}
+
+	.provider-delete-button {
+		@apply ml-auto size-8;
+	}
+
+	.provider-form-grid {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+
+	.codex-form-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.provider-form-grid .settings-field:first-child {
+		grid-column: span 2;
+	}
+
+	.settings-side-panel > .icon,
+	.settings-side-section > .icon {
+		@apply size-10 text-brand;
+	}
+
+	.settings-side-panel h2 {
+		@apply m-0 text-xl tracking-normal;
+	}
+
 	.auth-shell {
 		@apply grid min-h-[calc(100vh-64px)] place-items-center py-8;
 	}
@@ -460,6 +1178,7 @@
 		min-height: var(--showcase-control-height);
 		border-radius: var(--showcase-control-radius);
 		@apply inline-flex items-center justify-center gap-2 border border-transparent px-3.5 font-extrabold;
+		text-decoration: none;
 	}
 
 	.demo-button.primary {
@@ -1491,6 +2210,291 @@
 		background: var(--showcase-danger-surface);
 		color: var(--showcase-danger);
 	}
+
+	.evaluator-shell .evaluator-header {
+		border-color: var(--evaluator-border);
+	}
+
+	.evaluator-shell .evaluator-header h1,
+	.evaluator-shell .evaluator-section-heading h2,
+	.evaluator-shell .evaluator-panel-header h2,
+	.evaluator-shell .empty-results h2,
+	.evaluator-shell .dimension-row strong,
+	.evaluator-shell .workbench-item h3,
+	.evaluator-shell .focused-improvement-card h3,
+	.evaluator-shell .focused-improvement-card h4,
+	.evaluator-shell .score-tile strong,
+	.evaluator-shell .dimension-metrics b,
+	.evaluator-shell .item-gain strong,
+	.evaluator-shell .evidence-grid h3 {
+		color: var(--evaluator-ink);
+	}
+
+	.evaluator-shell .evaluator-header p,
+	.evaluator-shell .evaluator-panel-header p,
+	.evaluator-shell .dimension-row span,
+	.evaluator-shell .workbench-item p,
+	.evaluator-shell .workbench-item ul,
+	.evaluator-shell .focused-improvement-card p,
+	.evaluator-shell .focused-improvement-card li,
+	.evaluator-shell .evidence-grid ul,
+	.evaluator-shell .empty-results p,
+	.evaluator-shell .score-tile small,
+	.evaluator-shell .judge-snapshot dd {
+		color: var(--evaluator-muted);
+	}
+
+	.evaluator-shell .settings-field,
+	.evaluator-shell .score-tile span,
+	.evaluator-shell .dimension-metrics small,
+	.evaluator-shell .item-gain span,
+	.evaluator-shell .judge-snapshot dt {
+		color: var(--evaluator-muted-strong);
+	}
+
+	.evaluator-shell .showcase-kicker,
+	.evaluator-shell .evaluator-note.ready,
+	.evaluator-shell .score-tile.primary,
+	.evaluator-shell .demo-badge.success {
+		border-color: var(--evaluator-accent-border);
+		background: var(--evaluator-accent-soft);
+		color: var(--evaluator-accent-text);
+	}
+
+	.evaluator-shell .evaluator-alert,
+	.evaluator-shell .evaluator-note.blocked,
+	.evaluator-shell .demo-badge.destructive {
+		border-color: var(--evaluator-danger-border);
+		background: var(--evaluator-danger-surface);
+		color: var(--evaluator-danger);
+	}
+
+	.evaluator-shell .evaluator-controls,
+	.evaluator-shell .evaluator-results,
+	.evaluator-shell .evaluator-panel,
+	.evaluator-shell .empty-results {
+		border-color: var(--evaluator-border);
+		border-radius: var(--evaluator-panel-radius);
+		background: var(--evaluator-surface);
+		color: var(--evaluator-ink);
+		box-shadow: 0 14px 34px var(--evaluator-shadow);
+	}
+
+	.evaluator-shell .evaluator-controls,
+	.evaluator-shell .evaluator-results,
+	.evaluator-shell .evaluator-panel,
+	.evaluator-shell .empty-results {
+		padding: var(--evaluator-card-padding);
+	}
+
+	.evaluator-shell .evaluator-layout,
+	.evaluator-shell .score-grid,
+	.evaluator-shell .evidence-grid {
+		gap: var(--evaluator-gap);
+	}
+
+	.evaluator-shell .evaluator-controls,
+	.evaluator-shell .evaluator-results {
+		gap: var(--evaluator-gap);
+	}
+
+	.evaluator-shell .evaluator-two-column,
+	.evaluator-shell .dimension-list,
+	.evaluator-shell .workbench-list,
+	.evaluator-shell .path-picker-row,
+	.evaluator-shell .evaluator-actions {
+		gap: var(--evaluator-gap-tight);
+	}
+
+	.evaluator-shell .evaluator-section-heading {
+		border-color: var(--evaluator-border);
+	}
+
+	.evaluator-shell .evaluator-section-heading h2,
+	.evaluator-shell .evaluator-panel-header h2,
+	.evaluator-shell .empty-results h2 {
+		font-size: var(--evaluator-card-title-size);
+		line-height: 1.25;
+	}
+
+	.evaluator-shell .score-tile,
+	.evaluator-shell .dimension-row,
+	.evaluator-shell .workbench-item,
+	.evaluator-shell .focused-improvement-card {
+		border-color: var(--evaluator-border);
+		border-radius: var(--evaluator-card-radius);
+		background: var(--evaluator-surface-muted);
+		color: var(--evaluator-ink);
+	}
+
+	.evaluator-shell .score-tile.primary {
+		background: var(--evaluator-accent-surface);
+	}
+
+	.evaluator-shell .dimension-row.selected {
+		border-color: var(--evaluator-accent-border);
+		background: var(--evaluator-accent-surface);
+	}
+
+	.evaluator-shell .dimension-select {
+		border-color: var(--evaluator-border-strong);
+		background: var(--evaluator-surface);
+	}
+
+	.evaluator-shell .empty-results > .icon {
+		color: var(--evaluator-accent-text);
+	}
+
+	.evaluator-shell .settings-field select,
+	.evaluator-shell .demo-input,
+	.evaluator-shell .demo-textarea {
+		min-height: var(--evaluator-input-height);
+		border-color: var(--evaluator-border-strong);
+		border-radius: var(--evaluator-control-radius);
+		background: var(--evaluator-surface);
+		color: var(--evaluator-ink);
+	}
+
+	.evaluator-shell .settings-field select:disabled,
+	.evaluator-shell .demo-input:disabled,
+	.evaluator-shell .demo-textarea:disabled {
+		color: var(--evaluator-muted);
+		opacity: 0.68;
+	}
+
+	.evaluator-shell .demo-input::placeholder,
+	.evaluator-shell .demo-textarea::placeholder {
+		color: var(--evaluator-muted);
+	}
+
+	.evaluator-shell .settings-field select:focus,
+	.evaluator-shell .demo-input:focus,
+	.evaluator-shell .demo-textarea:focus {
+		border-color: var(--evaluator-accent);
+		box-shadow: 0 0 0 3px var(--evaluator-focus-ring);
+	}
+
+	.evaluator-shell .demo-button {
+		min-height: var(--evaluator-control-height);
+		border-radius: var(--evaluator-control-radius);
+	}
+
+	.evaluator-shell .demo-button.primary {
+		background: var(--evaluator-accent);
+		color: var(--evaluator-on-accent);
+	}
+
+	.evaluator-shell .demo-button.primary:hover:not(:disabled) {
+		background: var(--evaluator-accent-strong);
+	}
+
+	.evaluator-shell .demo-button.variant-outline,
+	.evaluator-shell .demo-badge.variant-outline {
+		border-color: var(--evaluator-border-strong);
+		background: var(--evaluator-surface);
+		color: var(--evaluator-ink);
+	}
+
+	.evaluator-shell .demo-button:disabled {
+		opacity: 0.56;
+	}
+
+	.evaluator-shell .demo-badge {
+		border-radius: var(--evaluator-control-radius);
+		font-size: var(--evaluator-font-size-small);
+	}
+
+	.evaluator-shell .tabs-list {
+		border-color: var(--evaluator-border);
+		border-radius: var(--evaluator-control-radius);
+		background: var(--evaluator-surface-muted);
+	}
+
+	.evaluator-shell .result-view-switcher {
+		border-color: var(--evaluator-border);
+		border-radius: var(--evaluator-control-radius);
+		background: var(--evaluator-surface-muted);
+	}
+
+	.evaluator-shell .tabs-list button {
+		color: var(--evaluator-muted);
+	}
+
+	.evaluator-shell .result-view-switcher button {
+		color: var(--evaluator-muted);
+	}
+
+	.evaluator-shell .tabs-list button.active {
+		background: var(--evaluator-surface);
+		color: var(--evaluator-ink);
+		box-shadow: 0 1px 3px var(--evaluator-shadow);
+	}
+
+	.evaluator-shell .result-view-switcher button.active {
+		background: var(--evaluator-surface);
+		color: var(--evaluator-ink);
+		box-shadow: 0 1px 3px var(--evaluator-shadow);
+	}
+
+	.evaluator-shell .settings-workbench {
+		gap: var(--evaluator-gap);
+	}
+
+	.evaluator-shell .provider-stack,
+	.evaluator-shell .provider-card,
+	.evaluator-shell .settings-side-panel {
+		gap: var(--evaluator-gap);
+	}
+
+	.evaluator-shell .provider-card {
+		border-color: var(--evaluator-border);
+		border-radius: var(--evaluator-card-radius);
+		background: var(--evaluator-surface-muted);
+		color: var(--evaluator-ink);
+	}
+
+	.evaluator-shell .provider-card.active {
+		border-color: var(--evaluator-accent-border);
+		background: var(--evaluator-accent-surface);
+	}
+
+	.evaluator-shell .provider-active-button {
+		border-color: var(--evaluator-border-strong);
+		border-radius: var(--evaluator-control-radius);
+		background: var(--evaluator-surface);
+		color: var(--evaluator-muted-strong);
+	}
+
+	.evaluator-shell .provider-card.active .provider-active-button {
+		border-color: var(--evaluator-accent-border);
+		background: var(--evaluator-surface);
+		color: var(--evaluator-accent-text);
+	}
+
+	.evaluator-shell .provider-active-button:hover:not(:disabled),
+	.evaluator-shell .provider-delete-button:hover:not(:disabled) {
+		border-color: var(--evaluator-accent-border);
+		background: var(--evaluator-accent-soft);
+		color: var(--evaluator-accent-text);
+	}
+
+	.evaluator-shell .provider-delete-button:disabled {
+		opacity: 0.45;
+	}
+
+	.evaluator-shell .provider-active-button input {
+		accent-color: var(--evaluator-accent);
+	}
+
+	.evaluator-shell .settings-side-section {
+		border-bottom: 1px solid var(--evaluator-border);
+		padding-bottom: var(--evaluator-card-padding);
+	}
+
+	.evaluator-shell .settings-side-panel > .icon,
+	.evaluator-shell .settings-side-section > .icon {
+		color: var(--evaluator-accent-text);
+	}
 }
 
 @keyframes spin {
@@ -1499,9 +2503,27 @@
 	}
 }
 
+@keyframes evaluator-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
 @media (max-width: 720px) {
 	.topbar {
-		@apply px-4;
+		@apply flex-wrap items-start px-4;
+	}
+
+	.brand {
+		@apply min-w-0;
+	}
+
+	.topbar-actions {
+		@apply w-full justify-start overflow-x-auto;
+	}
+
+	.menu-nav {
+		@apply max-w-full overflow-x-auto;
 	}
 
 	.auth-chip span {
@@ -1535,5 +2557,61 @@
 	.table-toolbar,
 	.table-pagination-bar {
 		@apply flex-col items-stretch;
+	}
+
+	.evaluator-layout,
+	.evaluator-two-column,
+	.path-picker-row,
+	.settings-workbench,
+	.score-grid,
+	.evidence-grid,
+	.focused-improvement-grid,
+	.workbench-item,
+	.provider-form-grid,
+	.codex-form-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.dimension-row {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
+
+	.dimension-metrics {
+		grid-column: 2;
+	}
+
+	.provider-form-grid .settings-field:first-child {
+		grid-column: auto;
+	}
+
+	.dimension-metrics,
+	.item-gain {
+		@apply items-start text-left;
+	}
+
+	.evaluator-workspace-header {
+		@apply flex-col items-stretch;
+	}
+
+	.workspace-actions {
+		@apply w-full justify-start;
+	}
+
+	.workspace-actions .demo-button,
+	.workspace-actions .evaluator-note {
+		@apply min-w-0 flex-1;
+	}
+
+	.result-view-tabs {
+		@apply w-full;
+		grid-auto-columns: minmax(0, 1fr);
+	}
+
+	.result-view-switcher {
+		@apply w-full;
+	}
+
+	.result-view-switcher button {
+		@apply min-w-0 flex-1;
 	}
 }

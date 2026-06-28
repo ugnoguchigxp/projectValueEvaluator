@@ -1,3 +1,5 @@
+import { mkdirSync } from "node:fs";
+import path from "node:path";
 import { Database } from "bun:sqlite";
 import type { BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
@@ -16,6 +18,14 @@ export type DbConnection = {
  * 接続の所有権はこのパッケージに帰属する
  */
 export function createDbConnection(databasePath: string): DbConnection {
+	if (/^[a-z][a-z0-9+.-]*:\/\//i.test(databasePath)) {
+		throw new Error(
+			"DATABASE_URL must be a SQLite file path. Network database URLs are not supported by the SQLite adapter.",
+		);
+	}
+	if (databasePath !== ":memory:") {
+		mkdirSync(path.dirname(path.resolve(databasePath)), { recursive: true });
+	}
 	const client = new Database(databasePath, { create: true });
 	const db = drizzle(client, { schema });
 	return { client, db, ownsConnection: true };
