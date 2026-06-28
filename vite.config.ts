@@ -9,6 +9,11 @@ export default defineConfig(({ mode }) => {
 	// Load env file from project root (one level up from 'web' root)
 	const env = loadEnv(mode, __dirname, "");
 	Object.assign(process.env, env);
+	const devServerPort = Number.parseInt(
+		env.DEV_SERVER_PORT ?? String(APP_CONFIG_DEFAULTS.port),
+		10,
+	);
+	const strictPort = env.DEV_SERVER_STRICT_PORT === "true";
 
 	return {
 		root: "web",
@@ -31,8 +36,10 @@ export default defineConfig(({ mode }) => {
 		},
 		server: {
 			host: APP_CONFIG_DEFAULTS.host,
-			port: APP_CONFIG_DEFAULTS.port,
-			strictPort: true,
+			port: Number.isFinite(devServerPort)
+				? devServerPort
+				: APP_CONFIG_DEFAULTS.port,
+			strictPort,
 		},
 		build: {
 			outDir: "../dist-web",

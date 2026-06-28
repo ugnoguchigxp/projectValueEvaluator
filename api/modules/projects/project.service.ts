@@ -31,6 +31,10 @@ export class ProjectService {
 		return project;
 	}
 
+	async findByRootPath(rootPath: string): Promise<ProjectProfile | null> {
+		return this.projects.findByRootPath(rootPath);
+	}
+
 	async list(): Promise<ProjectProfile[]> {
 		return this.projects.list();
 	}

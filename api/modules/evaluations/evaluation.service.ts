@@ -7,6 +7,7 @@ import type {
 	JudgeRun,
 	JudgeSelection,
 	ProjectValueEvaluation,
+	SavedFocusedImprovementIdea,
 } from "../../../shared/schemas/evaluation.schema";
 import type { EvaluationDimensionKey } from "../../../shared/schemas/project.schema";
 import type { ProjectService } from "../projects/project.service";
@@ -244,7 +245,7 @@ export class EvaluationService {
 		dimensionKeys: EvaluationDimensionKey[];
 		judge?: JudgeSelection;
 	}): Promise<{
-		ideas: FocusedImprovementIdea[];
+		ideas: SavedFocusedImprovementIdea[];
 		judgeRun: JudgeRun;
 		selectedDimensionKeys: EvaluationDimensionKey[];
 	}> {
@@ -286,10 +287,26 @@ export class EvaluationService {
 			dimensionKeys: selectedDimensionKeys,
 			judge: params.judge,
 		});
+		const savedIdeas = await this.evaluations.createFocusedImprovementIdeas(
+			evaluation.id,
+			generated.ideas,
+		);
 		return {
-			ideas: generated.ideas,
+			ideas: savedIdeas,
 			judgeRun: generated.judgeRun,
 			selectedDimensionKeys,
 		};
+	}
+
+	async getFocusedImprovementIdeas(
+		evaluationId: string,
+	): Promise<SavedFocusedImprovementIdea[]> {
+		const evaluation = await this.evaluations.findEvaluationById(evaluationId);
+		if (!evaluation) {
+			throw new HttpError(404, "Evaluation not found.");
+		}
+		return this.evaluations.findFocusedImprovementIdeasByEvaluationId(
+			evaluationId,
+		);
 	}
 }

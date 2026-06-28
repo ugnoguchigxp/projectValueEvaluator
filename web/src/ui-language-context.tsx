@@ -16,7 +16,8 @@ import type {
 import type { EvaluationDimensionKey } from "@shared/schemas/project.schema";
 import type { LlmProvider } from "./judge-settings-context";
 
-const STORAGE_KEY = "project-value-evaluator.ui-language.v1";
+const STORAGE_KEY = "project-value-evaluator.ui-language.v2";
+const DEFAULT_LANGUAGE: UiLanguage = "ja";
 
 export type UiLanguage = "en" | "ja";
 
@@ -102,13 +103,14 @@ type UiCopy = {
 		selectDimensionForImprovements: string;
 		generatingImprovementIdeas: string;
 		focusedImprovementIdeas: string;
-		improvementDetail: string;
-		implementationSteps: string;
-		filesToInspect: string;
-		acceptanceCriteria: string;
-		verificationCommands: string;
-		expectedImpact: string;
-		risks: string;
+		agentPrompt: string;
+		implementationFocus: string;
+		expectedOutcome: string;
+		copyAgentPrompt: string;
+		copiedAgentPrompt: string;
+		copyAgentPromptFailed: string;
+		implementationEffect: string;
+		scoreGain: string;
 		defaultIdeal: string;
 		defaultPrimaryAudience: string;
 		defaultTargetWorkflow: string;
@@ -253,13 +255,14 @@ const copy: Record<UiLanguage, UiCopy> = {
 			selectDimensionForImprovements: "Select at least one score dimension",
 			generatingImprovementIdeas: "Generating improvement ideas",
 			focusedImprovementIdeas: "Focused Improvement Ideas",
-			improvementDetail: "Detailed plan",
-			implementationSteps: "Implementation steps",
-			filesToInspect: "Files to inspect",
-			acceptanceCriteria: "Acceptance criteria",
-			verificationCommands: "Verification commands",
-			expectedImpact: "Expected impact",
-			risks: "Risks",
+			agentPrompt: "Agent-ready request",
+			implementationFocus: "Implementation focus",
+			expectedOutcome: "Expected outcome",
+			copyAgentPrompt: "Copy request",
+			copiedAgentPrompt: "Copied",
+			copyAgentPromptFailed: "Could not copy the request.",
+			implementationEffect: "Implementation effect",
+			scoreGain: "gain",
 			defaultIdeal:
 				"This project provides clear value to its target users, with its primary workflow implemented, verified, documented, and maintainable.",
 			defaultPrimaryAudience: "coding agents",
@@ -329,6 +332,7 @@ const copy: Record<UiLanguage, UiCopy> = {
 			security: "Security",
 			maintainability: "Maintainability",
 			extensibility: "Extensibility",
+			marketCompetitiveness: "Market Competitiveness",
 			ossProductValue: "OSS / External Value",
 			strategicFit: "Strategic Fit",
 			documentation: "Documentation",
@@ -446,20 +450,21 @@ const copy: Record<UiLanguage, UiCopy> = {
 			noEvaluationHelp:
 				"プロジェクトプロファイルを設定して評価を実行してください。",
 			evaluationControls: "評価コントロール",
-			improvementActionTitle: "次のアクション",
+			improvementActionTitle: "次に行うこと",
 			improvementActionHelp:
-				"評価軸を選択し、この保存済み評価コンテキストを引き継いで具体的な改善案を生成します。",
+				"チェックした評価軸を対象に、この保存済み評価セッションとコンテキストを引き継いで具体的な改善案を生成します。",
 			generateSelectedImprovements: "チェックされた評価軸の改善案を考案",
 			selectDimensionForImprovements: "評価軸を1つ以上選択してください",
 			generatingImprovementIdeas: "改善案を生成中",
 			focusedImprovementIdeas: "選択軸の改善案",
-			improvementDetail: "具体的な進め方",
-			implementationSteps: "実装手順",
-			filesToInspect: "確認するファイル",
-			acceptanceCriteria: "完了条件",
-			verificationCommands: "検証コマンド",
-			expectedImpact: "期待される効果",
-			risks: "リスク",
+			agentPrompt: "エージェント向け依頼文",
+			implementationFocus: "実装の焦点",
+			expectedOutcome: "期待する変化",
+			copyAgentPrompt: "依頼文をコピー",
+			copiedAgentPrompt: "コピー済み",
+			copyAgentPromptFailed: "依頼文をコピーできませんでした。",
+			implementationEffect: "実施効果",
+			scoreGain: "上昇見込み",
 			defaultIdeal:
 				"このプロジェクトが、対象ユーザーに明確な価値を提供し、主要ワークフローが実装・検証・文書・保守性で支えられている状態。",
 			defaultPrimaryAudience: "コーディングエージェント",
@@ -528,6 +533,7 @@ const copy: Record<UiLanguage, UiCopy> = {
 			security: "セキュリティ",
 			maintainability: "保守性",
 			extensibility: "拡張性",
+			marketCompetitiveness: "市場競争力",
 			ossProductValue: "OSS/外部提供価値",
 			strategicFit: "戦略適合",
 			documentation: "ドキュメント",
@@ -612,8 +618,9 @@ export function useUiLanguage() {
 
 function readStoredLanguage(): UiLanguage {
 	if (typeof window === "undefined") {
-		return "en";
+		return DEFAULT_LANGUAGE;
 	}
 	const value = window.localStorage.getItem(STORAGE_KEY);
-	return value === "ja" ? "ja" : "en";
+	if (value === "en" || value === "ja") return value;
+	return DEFAULT_LANGUAGE;
 }

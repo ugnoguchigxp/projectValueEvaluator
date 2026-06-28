@@ -257,24 +257,42 @@ export const improvementRequestSchema = z.object({
 });
 export type ImprovementRequest = z.infer<typeof improvementRequestSchema>;
 
+export const focusedImprovementScoreImpactSchema = z.object({
+	dimensionKey: evaluationDimensionKeySchema,
+	currentScore: z.number().int().min(0).max(100),
+	expectedScoreGain: z.number().int().min(0).max(100),
+	expectedScoreAfter: z.number().int().min(0).max(100),
+	rationale: z.string().min(1),
+});
+export type FocusedImprovementScoreImpact = z.infer<
+	typeof focusedImprovementScoreImpactSchema
+>;
+
 export const focusedImprovementIdeaSchema = z.object({
 	title: z.string().min(1),
 	targetDimensions: z.array(evaluationDimensionKeySchema).min(1),
 	summary: z.string().min(1),
-	detailedPlan: z.string().min(1),
-	implementationSteps: z.array(z.string().min(1)).min(1),
-	filesToInspect: z.array(z.string().min(1)),
-	acceptanceCriteria: z.array(z.string().min(1)).min(1),
-	verificationCommands: z.array(z.string().min(1)).min(1),
-	expectedImpact: z.string().min(1),
-	risks: z.array(z.string().min(1)),
+	agentPrompt: z.string().min(1),
+	implementationFocus: z.array(z.string().min(1)).min(1).max(4),
+	expectedOutcome: z.string().min(1),
+	scoreImpacts: z.array(focusedImprovementScoreImpactSchema),
 });
 export type FocusedImprovementIdea = z.infer<
 	typeof focusedImprovementIdeaSchema
 >;
 
+export const savedFocusedImprovementIdeaSchema =
+	focusedImprovementIdeaSchema.extend({
+		id: z.string().uuid(),
+		evaluationId: z.string().uuid(),
+		createdAt: z.string().datetime(),
+	});
+export type SavedFocusedImprovementIdea = z.infer<
+	typeof savedFocusedImprovementIdeaSchema
+>;
+
 export const focusedImprovementIdeasResultSchema = z.object({
-	schemaVersion: z.literal("focused-improvement-ideas/v1"),
+	schemaVersion: z.literal("focused-improvement-ideas/v3"),
 	ideas: z.array(focusedImprovementIdeaSchema).min(1),
 });
 export type FocusedImprovementIdeasResult = z.infer<
@@ -456,10 +474,17 @@ export type GenerateFocusedImprovementIdeasRequest = z.infer<
 >;
 
 export const generateFocusedImprovementIdeasResponseSchema = z.object({
-	ideas: z.array(focusedImprovementIdeaSchema),
+	ideas: z.array(savedFocusedImprovementIdeaSchema),
 	judgeRun: judgeRunSchema,
 	selectedDimensionKeys: z.array(evaluationDimensionKeySchema),
 });
 export type GenerateFocusedImprovementIdeasResponse = z.infer<
 	typeof generateFocusedImprovementIdeasResponseSchema
+>;
+
+export const listFocusedImprovementIdeasResponseSchema = z.object({
+	ideas: z.array(savedFocusedImprovementIdeaSchema),
+});
+export type ListFocusedImprovementIdeasResponse = z.infer<
+	typeof listFocusedImprovementIdeasResponseSchema
 >;

@@ -6,11 +6,12 @@ import { describe, expect, it } from "vitest";
 import {
 	type FocusedImprovementIdea,
 	improvementRequestSchema,
-	type EvaluationActivityEvent,
-	type EvaluationBundle,
-	type ImprovementRequest,
-	type ProjectValueEvaluation,
-} from "../../../shared/schemas/evaluation.schema";
+		type EvaluationActivityEvent,
+		type EvaluationBundle,
+		type ImprovementRequest,
+		type ProjectValueEvaluation,
+		type SavedFocusedImprovementIdea,
+	} from "../../../shared/schemas/evaluation.schema";
 import {
 	defaultEvaluationDimensions,
 	type ProjectProfile,
@@ -107,9 +108,10 @@ describe("evaluation MVP pipeline", () => {
 			"security",
 			"maintainability",
 			"extensibility",
-			"ossProductValue",
-			"strategicFit",
+			"marketCompetitiveness",
 		]);
+		expect(defaultEvaluationDimensions).not.toContain("ossProductValue");
+		expect(defaultEvaluationDimensions).not.toContain("strategicFit");
 		expect(defaultEvaluationDimensions).not.toContain("documentation");
 		expect(defaultEvaluationDimensions).not.toContain("agentUsability");
 		expect(defaultEvaluationDimensions).not.toContain("reliability");
@@ -463,19 +465,25 @@ describe("evaluation MVP pipeline", () => {
 		const bundle = await buildEvaluationBundle({ project });
 		const evaluation = createLlmEvaluation({ project, bundle });
 		const ideas: FocusedImprovementIdea[] = [
-			{
-				title: "UI 操作を改善する",
-				targetDimensions: ["uiUx"],
-				summary: "選択した UI/UX 軸だけに集中します。",
-				detailedPlan: "評価結果下部に次アクションを置きます。",
-				implementationSteps: ["ボタンを追加する", "改善案カードを表示する"],
-				filesToInspect: ["web/src/views/home-view.tsx"],
-				acceptanceCriteria: ["選択軸だけが対象になる"],
-				verificationCommands: ["bun run verify"],
-				expectedImpact: "UI/UX の改善余地が明確になります。",
-				risks: [],
-			},
-		];
+				{
+					title: "UI 操作を改善する",
+					targetDimensions: ["uiUx"],
+					summary: "選択した UI/UX 軸だけに集中します。",
+					agentPrompt:
+						"評価結果下部の次アクションを、選択した UI/UX 軸だけに集中した改善依頼として整理してください。既存の結果表示は崩さず、コーディングエージェントがそのまま実行できる短い依頼文をカードに表示できるようにします。",
+					implementationFocus: ["選択軸だけを対象にする", "短い依頼文を表示する"],
+					expectedOutcome: "UI/UX の改善余地が明確になります。",
+					scoreImpacts: [
+						{
+							dimensionKey: "uiUx",
+							currentScore: 64,
+							expectedScoreGain: 7,
+							expectedScoreAfter: 71,
+							rationale: "次アクションが結果画面で理解しやすくなります。",
+						},
+					],
+				},
+			];
 		const generateFocusedIdeas: GenerateFocusedImprovementIdeasFn = async (
 			params,
 		) => {
@@ -493,15 +501,29 @@ describe("evaluation MVP pipeline", () => {
 					model: "test-model",
 				},
 			};
-		};
-		const service = new EvaluationService(
-			{
-				get: async () => project,
-			} as never,
-			{
-				findEvaluationById: async () => evaluation,
-				findBundleById: async () => bundle,
-			} as never,
+			};
+			const savedIdeas: SavedFocusedImprovementIdea[] = ideas.map((idea) => ({
+				...idea,
+				id: randomUUID(),
+				evaluationId: evaluation.id,
+				createdAt: new Date().toISOString(),
+			}));
+			const service = new EvaluationService(
+				{
+					get: async () => project,
+				} as never,
+				{
+					findEvaluationById: async () => evaluation,
+					findBundleById: async () => bundle,
+					createFocusedImprovementIdeas: async (
+						evaluationId: string,
+						generatedIdeas: FocusedImprovementIdea[],
+					) => {
+						expect(evaluationId).toBe(evaluation.id);
+						expect(generatedIdeas).toEqual(ideas);
+						return savedIdeas;
+					},
+				} as never,
 			async () => {
 				throw new Error("not used");
 			},
@@ -518,7 +540,7 @@ describe("evaluation MVP pipeline", () => {
 			},
 		});
 
-		expect(result.ideas).toEqual(ideas);
-		expect(result.selectedDimensionKeys).toEqual(["uiUx"]);
-	});
+			expect(result.ideas).toEqual(savedIdeas);
+			expect(result.selectedDimensionKeys).toEqual(["uiUx"]);
+		});
 });

@@ -18,6 +18,8 @@
 		"auth:create-admin": "bun run api/cli/auth-create-admin.ts",
 		"evaluator:bundle": "bun run api/cli/bundle.ts",
 		"evaluator:evaluate": "bun run api/cli/evaluate.ts",
+		"evaluator:focused-improvements": "bun run api/cli/focused-improvements.ts",
+		"evaluator:nightworkers-tasks": "bun run api/cli/nightworkers-tasks.ts",
 		"evaluator:reevaluate": "bun run api/cli/reevaluate.ts",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "bun run api/cli/migrate.ts",

@@ -62,16 +62,25 @@ describe("evaluations route", () => {
 		const evaluationId = randomUUID();
 		const ideas = [
 			{
+				id: randomUUID(),
+				evaluationId,
 				title: "Improve UI flow",
 				targetDimensions: ["uiUx"],
 				summary: "Make the result workflow easier to scan.",
-				detailedPlan: "Move the main action into the result area.",
-				implementationSteps: ["Add the action button", "Render the result card"],
-				filesToInspect: ["web/src/views/home-view.tsx"],
-				acceptanceCriteria: ["The selected dimension is used"],
-				verificationCommands: ["bun run verify"],
-				expectedImpact: "Better UI/UX score",
-				risks: [],
+				agentPrompt:
+					"Improve the result workflow so the selected UI/UX dimension leads to a clear next action without changing unrelated screens.",
+				implementationFocus: ["Result action placement", "Focused card copy"],
+				expectedOutcome: "Better UI/UX score",
+				scoreImpacts: [
+					{
+						dimensionKey: "uiUx",
+						currentScore: 62,
+						expectedScoreGain: 8,
+						expectedScoreAfter: 70,
+						rationale: "The main result workflow becomes easier to act on.",
+					},
+				],
+				createdAt: new Date().toISOString(),
 			},
 		];
 		const judgeRun = {
@@ -124,5 +133,49 @@ describe("evaluations route", () => {
 				mode: "improvement-request",
 			},
 		});
+	});
+
+	it("returns saved focused improvement ideas", async () => {
+		const evaluationId = randomUUID();
+		const ideas = [
+			{
+				id: randomUUID(),
+				evaluationId,
+				title: "Improve agent request",
+				targetDimensions: ["maintainability"],
+				summary: "Make the request easy for another coding agent to execute.",
+				agentPrompt:
+					"Refine the generated improvement card so another coding agent can paste the request and start implementation without additional context.",
+				implementationFocus: ["Short actionable request"],
+				expectedOutcome: "The saved card remains reusable from history.",
+				scoreImpacts: [
+					{
+						dimensionKey: "maintainability",
+						currentScore: 70,
+						expectedScoreGain: 5,
+						expectedScoreAfter: 75,
+						rationale: "The improvement request becomes easier to maintain.",
+					},
+				],
+				createdAt: new Date().toISOString(),
+			},
+		];
+		const getFocusedImprovementIdeas = vi.fn().mockResolvedValue(ideas);
+		const app = new Hono().route(
+			"/evaluations",
+			createEvaluationsRoute({
+				evaluationService: {
+					getFocusedImprovementIdeas,
+				} as never,
+			}),
+		);
+
+		const res = await app.request(
+			`/evaluations/${evaluationId}/focused-improvements`,
+		);
+
+		expect(res.status).toBe(200);
+		await expect(res.json()).resolves.toEqual({ ideas });
+		expect(getFocusedImprovementIdeas).toHaveBeenCalledWith(evaluationId);
 	});
 });

@@ -49,8 +49,7 @@ ProjectProfile
 | `security` | セキュリティ |
 | `maintainability` | 保守性 |
 | `extensibility` | 拡張性 |
-| `ossProductValue` | OSS/外部提供価値 |
-| `strategicFit` | 戦略適合 |
+| `marketCompetitiveness` | 市場競争力 |
 
 ## Evidence Policy
 
@@ -86,12 +85,16 @@ bun run db:migrate
 ```bash
 bun run evaluator:evaluate -- --project /path/to/repo
 bun run evaluator:reevaluate -- --project /path/to/repo
+bun run evaluator:focused-improvements -- --project /path/to/repo --evaluation latest --dimensions lowest:3
+bun run evaluator:nightworkers-tasks -- --project /path/to/repo --evaluation latest --source focused --limit 3
 ```
 
 JSON 出力:
 
 ```bash
 bun run evaluator:evaluate -- --project /path/to/repo --json
+bun run evaluator:focused-improvements -- --project /path/to/repo --evaluation latest --dimensions lowest:3 --json
+bun run evaluator:nightworkers-tasks -- --project /path/to/repo --evaluation latest --source focused --limit 3 --json
 ```
 
 profile JSON を指定する場合:
@@ -101,6 +104,14 @@ bun run evaluator:evaluate -- --project /path/to/repo --profile project-profile.
 ```
 
 `project-profile.json` は `name`、`ideal`、`primaryAudience`、`targetWorkflow`、`nonGoals`、`dimensions` を上書きできます。`rootPath` は `--project` が優先されます。
+
+NightWorkers 向け JSONL 出力:
+
+```bash
+bun run evaluator:nightworkers-tasks -- --project /path/to/repo --evaluation latest --source focused --format jsonl
+```
+
+CLI は Hono サーバーを起動せず、既存の service / repository と SQLite を直接使います。machine-readable output は stdout、失敗理由は stderr に出し、失敗時は非 0 終了します。
 
 ## API
 

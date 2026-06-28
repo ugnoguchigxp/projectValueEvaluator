@@ -31,6 +31,16 @@ export function createEvaluationsRoute(deps: EvaluationRouteDeps) {
 				return c.json({ improvements });
 			},
 		)
+		.get(
+			"/:id/focused-improvements",
+			zValidator("param", evaluationIdParamSchema),
+			async (c) => {
+				const { id } = c.req.valid("param");
+				const ideas =
+					await deps.evaluationService.getFocusedImprovementIdeas(id);
+				return c.json({ ideas });
+			},
+		)
 		.post(
 			"/:id/focused-improvements",
 			zValidator("param", evaluationIdParamSchema),

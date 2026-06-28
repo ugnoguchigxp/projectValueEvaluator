@@ -10,20 +10,40 @@ import {
 	projectProfileInputSchema,
 	type ProjectProfile,
 	type ProjectProfileInput,
+	type EvaluationDimensionKey,
+	evaluationDimensionKeySchema,
 } from "../../shared/schemas/project.schema";
 import type {
 	EvaluationBundle,
 	EvaluationResponse,
+	GenerateFocusedImprovementIdeasResponse,
 	JudgeSelection,
+	ProjectValueEvaluation,
 } from "../../shared/schemas/evaluation.schema";
+import type { NightWorkersTasksExport } from "../../shared/schemas/nightworkers-task.schema";
 import { defaultCodexJudgeSelection } from "../modules/llm/judge-client";
 
-type ParsedArgs = {
+type OutputFormat = "json" | "jsonl";
+type NightWorkersTaskSource = "focused" | "gap-requests";
+
+export type ParsedArgs = {
 	project?: string;
 	profile?: string;
 	json: boolean;
 	baselinePrompt?: string;
 	judge: JudgeSelection;
+};
+
+export type FocusedImprovementArgs = ParsedArgs & {
+	evaluation: string;
+	dimensions: string;
+};
+
+export type NightWorkersTaskArgs = ParsedArgs & {
+	evaluation: string;
+	source: NightWorkersTaskSource;
+	limit?: number;
+	format: OutputFormat;
 };
 
 function readRequiredValue(
@@ -38,101 +58,202 @@ function readRequiredValue(
 	return value;
 }
 
-export function parseEvaluatorArgs(argv: string[]): ParsedArgs {
-	const parsed: ParsedArgs = {
+function applyCommonArg(
+	parsed: ParsedArgs,
+	argv: string[],
+	index: number,
+): number | null {
+	const arg = argv[index];
+	if (arg === "--json") {
+		parsed.json = true;
+		return index;
+	}
+	if (arg === "--project") {
+		parsed.project = readRequiredValue(argv, index, "--project");
+		return index + 1;
+	}
+	if (arg === "--profile") {
+		parsed.profile = readRequiredValue(argv, index, "--profile");
+		return index + 1;
+	}
+	if (arg === "--baseline-prompt") {
+		parsed.baselinePrompt = readRequiredValue(argv, index, "--baseline-prompt");
+		return index + 1;
+	}
+	if (arg === "--provider") {
+		const provider = readRequiredValue(argv, index, "--provider");
+		if (provider === "codex") {
+			parsed.judge = {
+				type: "codex-agent",
+				model:
+					parsed.judge.type === "codex-agent" ? parsed.judge.model : "gpt-5.5",
+				mode:
+					parsed.judge.type === "codex-agent"
+						? parsed.judge.mode
+						: "review-only",
+			};
+			return index + 1;
+		}
+		if (
+			provider === "openai" ||
+			provider === "azure-openai" ||
+			provider === "local-llm"
+		) {
+			parsed.judge = {
+				type: "llm-provider",
+				provider,
+				fallbackPolicy: "none",
+			};
+			return index + 1;
+		}
+		throw new Error(`Unsupported provider: ${provider}.`);
+	}
+	if (arg === "--model") {
+		const model = readRequiredValue(argv, index, "--model");
+		parsed.judge =
+			parsed.judge.type === "codex-agent"
+				? { ...parsed.judge, model: model as typeof parsed.judge.model }
+				: { ...parsed.judge, model };
+		return index + 1;
+	}
+	if (arg === "--codex-mode") {
+		const mode = readRequiredValue(argv, index, "--codex-mode");
+		if (
+			mode !== "review-only" &&
+			mode !== "improvement-request" &&
+			mode !== "reevaluation"
+		) {
+			throw new Error(`Unsupported Codex mode: ${mode}.`);
+		}
+		const codexMode = mode as
+			| "review-only"
+			| "improvement-request"
+			| "reevaluation";
+		parsed.judge =
+			parsed.judge.type === "codex-agent"
+				? { ...parsed.judge, mode: codexMode }
+				: { type: "codex-agent", model: "gpt-5.5", mode: codexMode };
+		return index + 1;
+	}
+	return null;
+}
+
+function createDefaultArgs(): ParsedArgs {
+	return {
 		json: false,
 		judge: defaultCodexJudgeSelection,
 	};
+}
+
+function assertProjectArg(args: ParsedArgs): void {
+	if (!args.project) {
+		throw new Error("Missing required --project <path> argument.");
+	}
+}
+
+export function parseEvaluatorArgs(argv: string[]): ParsedArgs {
+	const parsed = createDefaultArgs();
 	for (let index = 0; index < argv.length; index += 1) {
+		const nextIndex = applyCommonArg(parsed, argv, index);
+		if (nextIndex !== null) {
+			index = nextIndex;
+			continue;
+		}
+		throw new Error(`Unknown argument: ${argv[index]}`);
+	}
+	assertProjectArg(parsed);
+	return parsed;
+}
+
+export function parseFocusedImprovementArgs(
+	argv: string[],
+): FocusedImprovementArgs {
+	const parsed: FocusedImprovementArgs = {
+		...createDefaultArgs(),
+		evaluation: "latest",
+		dimensions: "lowest:3",
+	};
+	parsed.judge = {
+		type: "codex-agent",
+		model: defaultCodexJudgeSelection.model,
+		mode: "improvement-request",
+	};
+	for (let index = 0; index < argv.length; index += 1) {
+		const nextIndex = applyCommonArg(parsed, argv, index);
+		if (nextIndex !== null) {
+			index = nextIndex;
+			continue;
+		}
 		const arg = argv[index];
-		if (arg === "--json") {
-			parsed.json = true;
-			continue;
-		}
-		if (arg === "--project") {
-			parsed.project = readRequiredValue(argv, index, "--project");
+		if (arg === "--evaluation") {
+			parsed.evaluation = readRequiredValue(argv, index, "--evaluation");
 			index += 1;
 			continue;
 		}
-		if (arg === "--profile") {
-			parsed.profile = readRequiredValue(argv, index, "--profile");
+		if (arg === "--dimensions") {
+			parsed.dimensions = readRequiredValue(argv, index, "--dimensions");
 			index += 1;
-			continue;
-		}
-		if (arg === "--baseline-prompt") {
-			parsed.baselinePrompt = readRequiredValue(
-				argv,
-				index,
-				"--baseline-prompt",
-			);
-			index += 1;
-			continue;
-		}
-		if (arg === "--provider") {
-			const provider = readRequiredValue(argv, index, "--provider");
-			index += 1;
-			if (provider === "codex") {
-				parsed.judge = {
-					type: "codex-agent",
-					model:
-						parsed.judge.type === "codex-agent"
-							? parsed.judge.model
-							: "gpt-5.5",
-					mode:
-						parsed.judge.type === "codex-agent"
-							? parsed.judge.mode
-							: "review-only",
-				};
-				continue;
-			}
-			if (
-				provider === "openai" ||
-				provider === "azure-openai" ||
-				provider === "local-llm"
-			) {
-				parsed.judge = {
-					type: "llm-provider",
-					provider,
-					fallbackPolicy: "none",
-				};
-				continue;
-			}
-			throw new Error(`Unsupported provider: ${provider}.`);
-		}
-		if (arg === "--model") {
-			const model = readRequiredValue(argv, index, "--model");
-			index += 1;
-			parsed.judge =
-				parsed.judge.type === "codex-agent"
-					? { ...parsed.judge, model: model as typeof parsed.judge.model }
-					: { ...parsed.judge, model };
-			continue;
-		}
-		if (arg === "--codex-mode") {
-			const mode = readRequiredValue(argv, index, "--codex-mode");
-			index += 1;
-			if (
-				mode !== "review-only" &&
-				mode !== "improvement-request" &&
-				mode !== "reevaluation"
-			) {
-				throw new Error(`Unsupported Codex mode: ${mode}.`);
-			}
-			const codexMode = mode as
-				| "review-only"
-				| "improvement-request"
-				| "reevaluation";
-			parsed.judge =
-				parsed.judge.type === "codex-agent"
-					? { ...parsed.judge, mode: codexMode }
-					: { type: "codex-agent", model: "gpt-5.5", mode: codexMode };
 			continue;
 		}
 		throw new Error(`Unknown argument: ${arg}`);
 	}
-	if (!parsed.project) {
-		throw new Error("Missing required --project <path> argument.");
+	assertProjectArg(parsed);
+	return parsed;
+}
+
+export function parseNightWorkersTaskArgs(
+	argv: string[],
+): NightWorkersTaskArgs {
+	const parsed: NightWorkersTaskArgs = {
+		...createDefaultArgs(),
+		evaluation: "latest",
+		source: "focused",
+		format: "json",
+	};
+	for (let index = 0; index < argv.length; index += 1) {
+		const nextIndex = applyCommonArg(parsed, argv, index);
+		if (nextIndex !== null) {
+			index = nextIndex;
+			continue;
+		}
+		const arg = argv[index];
+		if (arg === "--evaluation") {
+			parsed.evaluation = readRequiredValue(argv, index, "--evaluation");
+			index += 1;
+			continue;
+		}
+		if (arg === "--source") {
+			const source = readRequiredValue(argv, index, "--source");
+			if (source !== "focused" && source !== "gap-requests") {
+				throw new Error(`Unsupported task source: ${source}.`);
+			}
+			parsed.source = source;
+			index += 1;
+			continue;
+		}
+		if (arg === "--limit") {
+			const rawLimit = readRequiredValue(argv, index, "--limit");
+			const limit = Number(rawLimit);
+			if (!Number.isInteger(limit) || limit < 1) {
+				throw new Error("--limit must be a positive integer.");
+			}
+			parsed.limit = limit;
+			index += 1;
+			continue;
+		}
+		if (arg === "--format") {
+			const format = readRequiredValue(argv, index, "--format");
+			if (format !== "json" && format !== "jsonl") {
+				throw new Error(`Unsupported format: ${format}.`);
+			}
+			parsed.format = format;
+			parsed.json = format === "json";
+			index += 1;
+			continue;
+		}
+		throw new Error(`Unknown argument: ${arg}`);
 	}
+	assertProjectArg(parsed);
 	return parsed;
 }
 
@@ -203,6 +324,69 @@ export async function findOrCreateCliProject(
 	return projectService.findOrCreate(projectInput);
 }
 
+export async function getOrCreateCliProject(
+	projectService: ProjectService,
+	args: ParsedArgs,
+): Promise<ProjectProfile> {
+	const projectInput = await loadProjectInput(args);
+	const existing = await projectService.findByRootPath(projectInput.rootPath);
+	return existing ?? projectService.create(projectInput);
+}
+
+export async function resolveEvaluationForCli(
+	evaluationService: EvaluationService,
+	project: ProjectProfile,
+	selector: string,
+): Promise<ProjectValueEvaluation> {
+	const evaluation =
+		selector === "latest"
+			? await evaluationService.getLatestEvaluation(project.id)
+			: await evaluationService.getEvaluation(selector);
+	if (evaluation.projectId !== project.id) {
+		throw new Error(
+			`Evaluation ${evaluation.id} does not belong to project ${project.id}.`,
+		);
+	}
+	return evaluation;
+}
+
+export function selectDimensionKeysForCli(
+	evaluation: ProjectValueEvaluation,
+	selector: string,
+): EvaluationDimensionKey[] {
+	const dimensions = evaluation.report?.dimensions ?? evaluation.dimensions;
+	if (selector === "all") {
+		return dimensions.map((dimension) => dimension.key);
+	}
+	if (selector.startsWith("lowest:")) {
+		const limit = Number(selector.slice("lowest:".length));
+		if (!Number.isInteger(limit) || limit < 1) {
+			throw new Error("--dimensions lowest:<n> must use a positive integer.");
+		}
+		return dimensions
+			.slice()
+			.sort((a, b) => a.score - b.score)
+			.slice(0, limit)
+			.map((dimension) => dimension.key);
+	}
+	const keys = selector
+		.split(",")
+		.map((key) => key.trim())
+		.filter(Boolean)
+		.map((key) => evaluationDimensionKeySchema.parse(key));
+	if (keys.length === 0) {
+		throw new Error("Select at least one dimension.");
+	}
+	const availableKeys = new Set(dimensions.map((dimension) => dimension.key));
+	const unavailable = keys.filter((key) => !availableKeys.has(key));
+	if (unavailable.length > 0) {
+		throw new Error(
+			`Selected dimensions are not present in evaluation ${evaluation.id}: ${unavailable.join(", ")}.`,
+		);
+	}
+	return keys;
+}
+
 export function printBundle(bundle: EvaluationBundle, json: boolean): void {
 	if (json) {
 		console.log(JSON.stringify({ bundle }, null, 2));
@@ -262,4 +446,39 @@ export function printEvaluation(
 			`${improvement.priority}. ${improvement.title} (${improvement.taskType})`,
 		);
 	}
+}
+
+export function printFocusedImprovements(
+	result: GenerateFocusedImprovementIdeasResponse & {
+		schemaVersion: "project-evaluator.focused-improvements/v1";
+		project: Pick<ProjectProfile, "id" | "rootPath" | "name">;
+		evaluation: Pick<ProjectValueEvaluation, "id" | "score" | "createdAt">;
+	},
+	json: boolean,
+): void {
+	if (json) {
+		console.log(JSON.stringify(result, null, 2));
+		return;
+	}
+	console.log(`Evaluation: ${result.evaluation.id}`);
+	console.log(
+		`Selected Dimensions: ${result.selectedDimensionKeys.join(", ")}`,
+	);
+	console.log(`Focused Improvements: ${result.ideas.length}`);
+	for (const [index, idea] of result.ideas.entries()) {
+		console.log(`${index + 1}. ${idea.title}`);
+	}
+}
+
+export function printNightWorkersTasks(
+	exported: NightWorkersTasksExport,
+	format: OutputFormat,
+): void {
+	if (format === "jsonl") {
+		for (const task of exported.tasks) {
+			console.log(JSON.stringify(task));
+		}
+		return;
+	}
+	console.log(JSON.stringify(exported, null, 2));
 }

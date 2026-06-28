@@ -10,6 +10,7 @@ export const evaluationDimensionKeySchema = z.enum([
 	"security",
 	"maintainability",
 	"extensibility",
+	"marketCompetitiveness",
 	"ossProductValue",
 	"strategicFit",
 	"documentation",
@@ -30,8 +31,7 @@ export const defaultEvaluationDimensions = [
 	"security",
 	"maintainability",
 	"extensibility",
-	"ossProductValue",
-	"strategicFit",
+	"marketCompetitiveness",
 ] as const satisfies EvaluationDimensionKey[];
 
 export const evaluationDimensionLabels: Record<EvaluationDimensionKey, string> =
@@ -45,6 +45,7 @@ export const evaluationDimensionLabels: Record<EvaluationDimensionKey, string> =
 		security: "Security",
 		maintainability: "Maintainability",
 		extensibility: "Extensibility",
+		marketCompetitiveness: "Market Competitiveness",
 		ossProductValue: "OSS / External Value",
 		strategicFit: "Strategic Fit",
 		documentation: "Documentation",

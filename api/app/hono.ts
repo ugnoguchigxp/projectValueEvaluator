@@ -37,7 +37,7 @@ type CachedAppRuntime = {
 	runtime: Promise<AppRuntime>;
 };
 
-const APP_RUNTIME_VERSION = "evaluation-activity-events-v1";
+const APP_RUNTIME_VERSION = "focused-improvement-score-impacts-v1";
 
 declare global {
 	var __honoStandardRuntime__:

@@ -196,6 +196,36 @@ export const improvementRequests = sqliteTable(
 	}),
 );
 
+export const focusedImprovementIdeas = sqliteTable(
+	"focused_improvement_ideas",
+	{
+		id: text("id")
+			.primaryKey()
+			.$defaultFn(() => randomUUID()),
+		evaluationId: text("evaluation_id")
+			.notNull()
+			.references(() => projectEvaluations.id, { onDelete: "cascade" }),
+		title: text("title").notNull(),
+		targetDimensionKeysJson: text("target_dimension_keys_json").notNull(),
+		summary: text("summary").notNull(),
+		agentPrompt: text("agent_prompt").notNull(),
+		implementationFocusJson: text("implementation_focus_json").notNull(),
+		expectedOutcome: text("expected_outcome").notNull(),
+		scoreImpactsJson: text("score_impacts_json").notNull().default("[]"),
+		createdAt: integer("created_at", { mode: "timestamp" })
+			.$defaultFn(() => new Date())
+			.notNull(),
+	},
+	(table) => ({
+		evaluationIdIdx: index("focused_improvement_ideas_evaluation_id_idx").on(
+			table.evaluationId,
+		),
+		createdAtIdx: index("focused_improvement_ideas_created_at_idx").on(
+			table.createdAt,
+		),
+	}),
+);
+
 export const evaluationActivityEvents = sqliteTable(
 	"evaluation_activity_events",
 	{

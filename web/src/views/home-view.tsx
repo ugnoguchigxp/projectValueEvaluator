@@ -3,6 +3,7 @@ import {
 	BarChart3,
 	BrainCircuit,
 	CheckCircle2,
+	Copy,
 	FolderOpen,
 	LoaderCircle,
 	Plus,
@@ -14,11 +15,12 @@ import type {
 	EvaluationActivityEvent,
 	EvaluationBundle,
 	EvaluationResponse,
-	FocusedImprovementIdea,
 	GenerateFocusedImprovementIdeasResponse,
 	JudgeSelection,
 	JudgeRun,
+	ListFocusedImprovementIdeasResponse,
 	ProjectValueEvaluation,
+	SavedFocusedImprovementIdea,
 } from "@shared/schemas/evaluation.schema";
 import type {
 	EvaluationDimensionKey,
@@ -65,13 +67,17 @@ async function listProjectEvaluations(projectId: string) {
 }
 
 async function fetchEvaluation(evaluationId: string) {
-	const detail = await parseJsonResponse<{
-		evaluation: ProjectValueEvaluation;
-		activityEvents: EvaluationActivityEvent[];
-	}>(await fetch(`/api/evaluations/${evaluationId}`));
+	const [detail, focused] = await Promise.all([
+		parseJsonResponse<{
+			evaluation: ProjectValueEvaluation;
+			activityEvents: EvaluationActivityEvent[];
+		}>(await fetch(`/api/evaluations/${evaluationId}`)),
+		listFocusedImprovements(evaluationId),
+	]);
 	return {
 		evaluation: detail.evaluation,
 		activityEvents: detail.activityEvents,
+		focusedImprovements: toDisplayedFocusedImprovements(focused.ideas),
 	};
 }
 
@@ -94,6 +100,12 @@ async function generateFocusedImprovements(
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ dimensionKeys, judge }),
 		}),
+	);
+}
+
+async function listFocusedImprovements(evaluationId: string) {
+	return parseJsonResponse<ListFocusedImprovementIdeasResponse>(
+		await fetch(`/api/evaluations/${evaluationId}/focused-improvements`),
 	);
 }
 
@@ -235,6 +247,7 @@ const generatedDimensionLabelsJa: Record<string, string> = {
 	Extensibility: "拡張性",
 	Reliability: "信頼性",
 	"Strategic Fit": "戦略適合",
+	"Market Competitiveness": "市場競争力",
 	"OSS / Product Value": "OSS / プロダクト価値",
 	"OSS / External Value": "OSS/外部提供価値",
 };
@@ -278,9 +291,18 @@ type DisplayedEvaluation = {
 	judgeRun?: JudgeRun;
 };
 
-type DisplayedFocusedImprovement = FocusedImprovementIdea & {
+type DisplayedFocusedImprovement = SavedFocusedImprovementIdea & {
 	key: string;
 };
+
+function toDisplayedFocusedImprovements(
+	ideas: SavedFocusedImprovementIdea[],
+): DisplayedFocusedImprovement[] {
+	return ideas.map((idea) => ({
+		...idea,
+		key: idea.id,
+	}));
+}
 
 type ProjectFolder = {
 	rootPath: string;
@@ -436,6 +458,9 @@ export function HomeView() {
 	const [improvementErrorText, setImprovementErrorText] = useState<
 		string | null
 	>(null);
+	const [copiedImprovementKey, setCopiedImprovementKey] = useState<
+		string | null
+	>(null);
 
 	const adapterReady = isExecutableJudge(activeJudge, activeConfig);
 	const activeJudgeIsCodex = activeJudge === "codex-agent";
@@ -527,7 +552,24 @@ export function HomeView() {
 	const clearFocusedImprovements = useCallback(() => {
 		setFocusedImprovements([]);
 		setImprovementErrorText(null);
+		setCopiedImprovementKey(null);
 	}, []);
+
+	async function copyFocusedImprovementPrompt(
+		idea: DisplayedFocusedImprovement,
+	) {
+		try {
+			await navigator.clipboard.writeText(idea.agentPrompt);
+			setCopiedImprovementKey(idea.key);
+			window.setTimeout(() => {
+				setCopiedImprovementKey((current) =>
+					current === idea.key ? null : current,
+				);
+			}, 1800);
+		} catch {
+			setImprovementErrorText(t.home.copyAgentPromptFailed);
+		}
+	}
 
 	async function generateSelectedDimensionImprovements() {
 		if (!result || selectedDimensionKeyList.length === 0) return;
@@ -539,12 +581,7 @@ export function HomeView() {
 				selectedDimensionKeyList,
 				judgeSelection,
 			);
-			setFocusedImprovements(
-				response.ideas.map((idea, index) => ({
-					...idea,
-					key: `${result.evaluation.id}-${index}-${idea.title}`,
-				})),
-			);
+			setFocusedImprovements(toDisplayedFocusedImprovements(response.ideas));
 		} catch (error) {
 			setImprovementErrorText(
 				error instanceof Error ? error.message : String(error),
@@ -552,6 +589,10 @@ export function HomeView() {
 		} finally {
 			setImprovementBusy(false);
 		}
+	}
+
+	function dimensionLabel(key: EvaluationDimensionKey): string {
+		return t.dimensions[key] ?? key;
 	}
 
 	async function refreshProjects() {
@@ -577,7 +618,7 @@ export function HomeView() {
 				setSelectedEvaluationId(latest.id);
 				setResult(detail);
 				clearSelectedDimensions();
-				clearFocusedImprovements();
+				setFocusedImprovements(detail.focusedImprovements);
 				setActivityEvents([]);
 				setActivityStreamStatus("idle");
 				setLastActivityAt(null);
@@ -606,7 +647,7 @@ export function HomeView() {
 			setSelectedEvaluationId(evaluation.id);
 			setResult(detail);
 			clearSelectedDimensions();
-			clearFocusedImprovements();
+			setFocusedImprovements(detail.focusedImprovements);
 			setActivityEvents([]);
 			setActivityStreamStatus("idle");
 			setLastActivityAt(null);
@@ -650,7 +691,7 @@ export function HomeView() {
 			setSelectedEvaluationId(latest.id);
 			setResult(detail);
 			clearSelectedDimensions();
-			clearFocusedImprovements();
+			setFocusedImprovements(detail.focusedImprovements);
 			setActivityEvents([]);
 			setActivityStreamStatus("idle");
 			setLastActivityAt(null);
@@ -713,7 +754,7 @@ export function HomeView() {
 						setSelectedEvaluationId(latest.id);
 						setResult(detail);
 						clearSelectedDimensions();
-						clearFocusedImprovements();
+						setFocusedImprovements(detail.focusedImprovements);
 						setActivityEvents([]);
 						setActivityStreamStatus("idle");
 						setLastActivityAt(null);
@@ -732,7 +773,7 @@ export function HomeView() {
 		return () => {
 			canceled = true;
 		};
-	}, [clearFocusedImprovements, clearSelectedDimensions]);
+	}, [clearSelectedDimensions]);
 
 	async function runEvaluation(mode: "evaluate" | "reevaluate") {
 		if (!adapterReady || !selectedProject) return;
@@ -1230,66 +1271,72 @@ export function HomeView() {
 													<p>{idea.summary}</p>
 												</div>
 											</div>
-											<section>
-												<h4>{t.home.improvementDetail}</h4>
-												<p>{idea.detailedPlan}</p>
-											</section>
-											<section>
-												<h4>{t.home.implementationSteps}</h4>
-												<ol>
-													{idea.implementationSteps.map((step) => (
-														<li key={step}>{step}</li>
-													))}
-												</ol>
-											</section>
-											<div className="focused-improvement-grid">
-												<section>
-													<h4>{t.home.filesToInspect}</h4>
-													<ul>
-														{idea.filesToInspect.length > 0 ? (
-															idea.filesToInspect.map((file) => (
-																<li key={file}>{file}</li>
-															))
+											<section className="focused-improvement-agent-request">
+												<div className="focused-improvement-section-header">
+													<h4>{t.home.agentPrompt}</h4>
+													<button
+														type="button"
+														className="demo-button secondary"
+														onClick={() =>
+															void copyFocusedImprovementPrompt(idea)
+														}
+													>
+														{copiedImprovementKey === idea.key ? (
+															<CheckCircle2 className="icon" />
 														) : (
-															<li>{t.home.notSet}</li>
+															<Copy className="icon" />
 														)}
-													</ul>
-												</section>
-												<section>
-													<h4>{t.home.acceptanceCriteria}</h4>
-													<ul>
-														{idea.acceptanceCriteria.map((item) => (
-															<li key={item}>{item}</li>
-														))}
-													</ul>
-												</section>
-												<section>
-													<h4>{t.home.verificationCommands}</h4>
-													<ul>
-														{idea.verificationCommands.map((command) => (
-															<li key={command}>
-																<code>{command}</code>
-															</li>
-														))}
-													</ul>
-												</section>
-												<section>
-													<h4>{t.home.risks}</h4>
-													<ul>
-														{idea.risks.length > 0 ? (
-															idea.risks.map((risk) => (
-																<li key={risk}>{risk}</li>
-															))
-														) : (
-															<li>{t.home.notSet}</li>
-														)}
-													</ul>
+														{copiedImprovementKey === idea.key
+															? t.home.copiedAgentPrompt
+															: t.home.copyAgentPrompt}
+													</button>
+												</div>
+												<pre>{idea.agentPrompt}</pre>
+											</section>
+											<div className="focused-improvement-lower">
+												<div className="focused-improvement-lower-main">
+													<section>
+														<h4>{t.home.implementationFocus}</h4>
+														<ul className="focused-improvement-focus-list">
+															{idea.implementationFocus.map((item) => (
+																<li key={item}>{item}</li>
+															))}
+														</ul>
+													</section>
+													<section>
+														<h4>{t.home.expectedOutcome}</h4>
+														<p>{idea.expectedOutcome}</p>
+													</section>
+												</div>
+												<section className="focused-improvement-effect">
+													<h4>{t.home.implementationEffect}</h4>
+													{idea.scoreImpacts.length > 0 ? (
+														<div className="focused-improvement-score-list">
+															{idea.scoreImpacts.map((impact) => (
+																<div
+																	className="focused-improvement-score-impact"
+																	key={impact.dimensionKey}
+																>
+																	<strong>
+																		{dimensionLabel(impact.dimensionKey)}
+																	</strong>
+																	<span>
+																		{impact.currentScore} {"->"}{" "}
+																		{impact.expectedScoreAfter}
+																	</span>
+																	<small>
+																		{t.home.scoreGain} +
+																		{impact.expectedScoreGain}
+																	</small>
+																	<p>{impact.rationale}</p>
+																</div>
+															))}
+														</div>
+													) : (
+														<p>{t.home.notSet}</p>
+													)}
 												</section>
 											</div>
-											<section>
-												<h4>{t.home.expectedImpact}</h4>
-												<p>{idea.expectedImpact}</p>
-											</section>
 										</article>
 									))}
 								</div>

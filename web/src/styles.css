@@ -634,6 +634,61 @@
 		@apply m-0 pl-5;
 	}
 
+	.focused-improvement-section-header {
+		@apply flex flex-wrap items-center justify-between gap-2;
+	}
+
+	.focused-improvement-lower {
+		@apply grid gap-3;
+		grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+	}
+
+	.focused-improvement-lower-main {
+		@apply grid gap-3;
+		align-content: start;
+	}
+
+	.focused-improvement-effect {
+		@apply rounded-control border border-border bg-white px-3 py-2;
+		align-content: start;
+	}
+
+	.focused-improvement-agent-request pre {
+		@apply m-0 whitespace-pre-wrap rounded-control border border-border bg-white p-3 text-ink;
+		font-family: inherit;
+		font-size: var(--evaluator-font-size);
+		line-height: 1.65;
+	}
+
+	.focused-improvement-focus-list {
+		@apply grid gap-1.5 pl-5;
+	}
+
+	.focused-improvement-score-list {
+		@apply flex flex-wrap gap-2;
+	}
+
+	.focused-improvement-score-impact {
+		@apply flex min-w-0 flex-wrap items-center gap-2 rounded-control border border-border bg-[#fbfcfd] px-2.5 py-1.5;
+	}
+
+	.focused-improvement-score-impact strong {
+		@apply text-sm font-extrabold text-ink;
+	}
+
+	.focused-improvement-score-impact span {
+		@apply rounded-sm border border-border bg-white px-1.5 py-0.5 text-sm font-extrabold text-ink;
+	}
+
+	.focused-improvement-score-impact small,
+	.focused-improvement-score-impact p {
+		@apply text-xs font-bold text-muted;
+	}
+
+	.focused-improvement-score-impact p {
+		@apply m-0 min-w-40 flex-1 font-medium;
+	}
+
 	.focused-improvement-card code {
 		@apply rounded-sm border border-border bg-white px-1 py-0.5;
 		font-size: var(--evaluator-font-size-small);
@@ -2566,6 +2621,7 @@
 	.score-grid,
 	.evidence-grid,
 	.focused-improvement-grid,
+	.focused-improvement-lower,
 	.workbench-item,
 	.provider-form-grid,
 	.codex-form-grid {

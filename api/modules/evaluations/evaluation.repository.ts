@@ -5,14 +5,18 @@ import {
 	evaluationBundleSchema,
 	improvementRequestSchema,
 	projectValueEvaluationSchema,
+	savedFocusedImprovementIdeaSchema,
 	type EvaluationActivityEvent,
 	type EvaluationBundle,
+	type FocusedImprovementIdea,
 	type ImprovementRequest,
 	type ProjectValueEvaluation,
+	type SavedFocusedImprovementIdea,
 } from "../../../shared/schemas/evaluation.schema";
 import {
 	evaluationActivityEvents,
 	evaluationBundles,
+	focusedImprovementIdeas,
 	improvementRequests,
 	projectEvaluations,
 } from "../../db/schema";
@@ -101,6 +105,23 @@ function toImprovementRequest(
 		prompt: row.prompt,
 		acceptanceCriteria: parseJson(row.acceptanceCriteriaJson),
 		verificationCommands: parseJson(row.verificationCommandsJson),
+		createdAt: toIso(row.createdAt),
+	});
+}
+
+function toSavedFocusedImprovementIdea(
+	row: typeof focusedImprovementIdeas.$inferSelect,
+): SavedFocusedImprovementIdea {
+	return savedFocusedImprovementIdeaSchema.parse({
+		id: row.id,
+		evaluationId: row.evaluationId,
+		title: row.title,
+		targetDimensions: parseJson(row.targetDimensionKeysJson),
+		summary: row.summary,
+		agentPrompt: row.agentPrompt,
+		implementationFocus: parseJson(row.implementationFocusJson),
+		expectedOutcome: row.expectedOutcome,
+		scoreImpacts: parseJson(row.scoreImpactsJson),
 		createdAt: toIso(row.createdAt),
 	});
 }
@@ -233,6 +254,31 @@ export class EvaluationRepository {
 			)
 			.returning();
 		return rows.map(toImprovementRequest);
+	}
+
+	async createFocusedImprovementIdeas(
+		evaluationId: string,
+		ideas: FocusedImprovementIdea[],
+	): Promise<SavedFocusedImprovementIdea[]> {
+		if (ideas.length === 0) return [];
+		const createdAt = new Date();
+		const rows = await this.db
+			.insert(focusedImprovementIdeas)
+			.values(
+				ideas.map((idea) => ({
+					evaluationId,
+					title: idea.title,
+					targetDimensionKeysJson: JSON.stringify(idea.targetDimensions),
+					summary: idea.summary,
+					agentPrompt: idea.agentPrompt,
+					implementationFocusJson: JSON.stringify(idea.implementationFocus),
+					expectedOutcome: idea.expectedOutcome,
+					scoreImpactsJson: JSON.stringify(idea.scoreImpacts),
+					createdAt,
+				})),
+			)
+			.returning();
+		return rows.map(toSavedFocusedImprovementIdea);
 	}
 
 	async createActivityEvents(
@@ -461,5 +507,15 @@ export class EvaluationRepository {
 			orderBy: [asc(improvementRequests.priority)],
 		});
 		return rows.map(toImprovementRequest);
+	}
+
+	async findFocusedImprovementIdeasByEvaluationId(
+		evaluationId: string,
+	): Promise<SavedFocusedImprovementIdea[]> {
+		const rows = await this.db.query.focusedImprovementIdeas.findMany({
+			where: eq(focusedImprovementIdeas.evaluationId, evaluationId),
+			orderBy: [asc(focusedImprovementIdeas.createdAt)],
+		});
+		return rows.map(toSavedFocusedImprovementIdea);
 	}
 }
